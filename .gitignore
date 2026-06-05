@@ -1,0 +1,33 @@
+# CCB runtime/session state
+.ccb/.*-session
+.ccb/agents/
+.ccb/ccbd/
+.ccb/runtime/
+.ccb/shared-cache/
+.ccb/state/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor / IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+..playwright-mcp

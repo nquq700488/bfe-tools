@@ -1,0 +1,28 @@
+# 构建产物
+dist/
+dist-ssr/
+*.local
+
+# TypeScript 构建缓存
+*.tsbuildinfo
+
+# 依赖
+node_modules/
+
+# Editor / IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*

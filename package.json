@@ -1,0 +1,18 @@
+{
+  "name": "bfe-tools",
+  "private": true,
+  "scripts": {
+    "dev": "bash dev.sh",
+    "dev:web": "cd web && pnpm dev",
+    "dev:server": "cd server && ./start.sh",
+    "dev:desktop": "cd desktop && pnpm dev",
+    "kill": "pnpm kill:web; pnpm kill:server; pnpm kill:desktop; echo '✅ 已清理所有开发端口'",
+    "kill:web": "lsof -i -P | grep LISTEN | grep -E ':(517[0-9])' | awk '{print $2}' | sort -u | xargs kill 2>/dev/null; echo '✅ 已清理前端端口'",
+    "kill:server": "lsof -i -P | grep LISTEN | grep -E ':(8000)' | awk '{print $2}' | sort -u | xargs kill 2>/dev/null; echo '✅ 已清理后端端口'",
+    "kill:desktop": "lsof -i -P | grep LISTEN | grep -E ':(1800[0-9])' | awk '{print $2}' | sort -u | xargs kill 2>/dev/null; echo '✅ 已清理桌面端端口'",
+    "clean": "bash clean.sh",
+    "build:web": "cd web && pnpm build",
+    "build:desktop": "cd desktop && pnpm build",
+    "build:desktop:embed": "cd desktop && pnpm build:embed"
+  }
+}

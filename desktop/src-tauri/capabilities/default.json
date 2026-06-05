@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "bfe-tools-default",
+  "description": "bfe-tools 最小权限 — 纯 WebView 壳",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

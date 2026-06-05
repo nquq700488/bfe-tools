@@ -1,0 +1,27 @@
+# 构建产物
+src-tauri/target/
+dist/
+
+# 依赖
+node_modules/
+
+# Editor / IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# macOS
+.DS_Store
