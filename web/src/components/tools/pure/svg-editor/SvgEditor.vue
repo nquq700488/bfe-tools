@@ -8,6 +8,8 @@ import { NButton, NInput, NAlert, NSpace } from 'naive-ui'
 import ToolHeader from '@/components/tools/shared/ToolHeader.vue'
 import CopyButton from '@/components/tools/shared/CopyButton.vue'
 import { sanitizeSvg } from '@/lib/security/sanitizeSvg'
+import { optimizeSvg } from '@/lib/security/optimizeSvg'
+import type { OptimizeStats } from '@/lib/security/optimizeSvg'
 import type { ClientOnlyToolDefinition } from '@/types/tool'
 
 /** 默认 SVG 示例 */
@@ -53,6 +55,8 @@ const svgCode = ref(DEFAULT_SVG)
 const sanitized = ref('')
 const previewKey = ref(0)
 const svgError = ref<string | null>(null)
+const optimizeStats = ref<OptimizeStats | null>(null)
+const showOptimizeResult = ref(false)
 
 const PRESETS: Array<{ label: string; value: string }> = [
   { label: '矩形', value: RECT_SVG },
@@ -146,6 +150,22 @@ function exportPng(): void {
   img.src = url
 }
 
+// ---- SVG 优化 ----
+function handleOptimize(): void {
+  if (!svgCode.value.trim()) return
+  const result = optimizeSvg(svgCode.value)
+  svgCode.value = result.svg
+  optimizeStats.value = result.stats
+  showOptimizeResult.value = true
+  // 4 秒后自动隐藏统计条
+  setTimeout(() => { showOptimizeResult.value = false }, 4000)
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  return `${(bytes / 1024).toFixed(1)} KB`
+}
+
 // ---- iframe 渲染通过 template 中的 :srcdoc="sanitized" + sandbox="" 安全注入 ----
 </script>
 
@@ -177,6 +197,9 @@ function exportPng(): void {
           <span class="se-col-label">SVG 源码</span>
           <NSpace :size="4">
             <CopyButton :content="svgCode" />
+            <NButton text size="tiny" type="warning" @click="handleOptimize" :disabled="!svgCode.trim()">
+              优化 {{ optimizeStats ? `（-${optimizeStats.reductionPercent}%）` : '' }}
+            </NButton>
             <NButton text size="tiny" @click="exportSvgFile" :disabled="!sanitized">导出 SVG</NButton>
             <NButton text size="tiny" @click="exportPng" :disabled="!sanitized">导出 PNG</NButton>
           </NSpace>
@@ -188,6 +211,12 @@ function exportPng(): void {
           placeholder="输入 SVG 代码..."
           class="se-textarea"
         />
+        <!-- 优化统计条 -->
+        <div v-if="showOptimizeResult && optimizeStats" class="se-optimize-bar">
+          <span class="se-optimize-icon">📦</span>
+          <span>{{ formatBytes(optimizeStats.originalBytes) }} → {{ formatBytes(optimizeStats.optimizedBytes) }}</span>
+          <span class="se-optimize-pct">减少 {{ optimizeStats.reductionPercent }}%</span>
+        </div>
         <NAlert v-if="svgError" type="warning" :bordered="false" class="mt-2">
           {{ svgError }}
         </NAlert>
@@ -271,5 +300,24 @@ function exportPng(): void {
 .se-preview-empty {
   font-size: var(--text-sm); color: var(--color-neutral-300);
   padding: 32px; text-align: center;
+}
+
+/* 优化统计条 */
+.se-optimize-bar {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; padding: 10px 14px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1px solid #f59e0b; border-radius: 8px;
+  font-size: var(--text-xs); color: #92400e;
+  animation: se-optimize-in .3s ease;
+}
+.se-optimize-icon { font-size: 16px; }
+.se-optimize-pct {
+  margin-left: auto; font-weight: var(--font-weight-semibold);
+  color: #b45309;
+}
+@keyframes se-optimize-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

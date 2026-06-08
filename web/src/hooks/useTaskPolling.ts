@@ -2,7 +2,7 @@ import { ref, onUnmounted } from 'vue'
 import { to } from '@/lib/to'
 import { apiClient } from '@/lib/api'
 import type { TaskStatus } from '@/types/tool'
-import type { OcrSegment } from '@/types/api'
+import type { OcrSegment, OutputFile } from '@/types/api'
 
 /**
  * @name useTaskPolling
@@ -19,6 +19,8 @@ export function useTaskPolling() {
   const resultFileName = ref<string | null>(null)
   const resultText = ref<string | null>(null)
   const ocrSegments = ref<OcrSegment[] | null>(null)
+  const outputFiles = ref<OutputFile[] | null>(null)
+  const resultMetadata = ref<Record<string, unknown> | null>(null)
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let stopped = false
@@ -45,6 +47,8 @@ export function useTaskPolling() {
     resultFileName.value = resp.data.resultFileName || null
     resultText.value = resp.data.resultText || null
     ocrSegments.value = resp.data.ocrSegments || null
+    outputFiles.value = resp.data.outputFiles || null
+    resultMetadata.value = resp.data.resultMetadata || null
     errorMessage.value = resp.data.error
 
     if (['succeeded', 'failed', 'canceled'].includes(resp.data.status)) {
@@ -70,6 +74,8 @@ export function useTaskPolling() {
     resultFileName.value = null
     resultText.value = null
     ocrSegments.value = null
+    outputFiles.value = null
+    resultMetadata.value = null
 
     // 立即查一次（缓存命中秒返）
     fetchStatus(jobId)
@@ -88,6 +94,8 @@ export function useTaskPolling() {
     resultFileName,
     resultText,
     ocrSegments,
+    outputFiles,
+    resultMetadata,
     start,
     stop,
   }

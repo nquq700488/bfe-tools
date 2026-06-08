@@ -13,6 +13,11 @@
 | 🖼️ 图片信息识别 | 上传图片 → 提取文字 | easyocr（中文 + 英文） |
 | 🎬 媒体格式转换 | 浏览器不兼容格式 → Web 友好格式 | PyAV（Python FFmpeg 绑定） |
 | 🧹 图片去水印 | 框选水印区域 → AI 智能填充 | OpenCV cv2.inpaint() NS 算法 + LAB 色彩空间 |
+| 📄 PDF 工具箱 | 拆分/合并/压缩 PDF，提取文字与图片 | PyMuPDF（fitz） |
+| 📸 多分辨率截图 | 输入 URL → 多分辨率截图并排对比 + srcset | Playwright 无头浏览器 |
+| 🖼️ 图片批量处理 | 批量 resize / 格式转换 / 多倍图 + srcset 代码 | Pillow |
+| 🎞️ 视频取帧 | 按间隔或指定时间点提取关键帧 → 打包下载 | PyAV |
+| 🖥️ HTML 渲染截图 | 粘贴 HTML/CSS → 无头浏览器渲染 → 高清截图 | Playwright 无头浏览器 |
 
 ### 纯前端工具
 
@@ -20,7 +25,7 @@
 | ---- | ---- | ---- |
 | ✨ 动画实验室 | 11 种预设动画实时预览与参数调节 | Anime.js v4 |
 | 🎨 颜色转换器 | HEX / RGB / HSL / OKLCH 互转 | culori |
-| ✏️ SVG 编辑器 | 在线编辑 SVG 源码 + 实时预览 | - |
+| ✏️ SVG 编辑器 | 在线编辑 SVG 源码 + 实时预览 + 一键优化 | 浏览器端 sanitize + optimize |
 | 🗜️ 图片压缩 | 浏览器端压缩图片，调整尺寸与格式 | browser-image-compression |
 | 📱 二维码生成 | 文本/链接 → 可定制二维码（颜色+Logo） | qrcode |
 | ⏰ Cron 表达式解析 | 解析为人类可读描述，计算未来执行时间 | cronstrue |
@@ -28,6 +33,8 @@
 | 🔤 HTML 实体编解码 | HTML 实体与原始字符双向转换 | - |
 | 📋 JSON 格式化/校验 | 格式化、压缩、校验、树形浏览 | - |
 | 🔗 URL 编解码 | URL 编解码 + 组件级参数解析 | - |
+
+> 侧边栏支持搜索过滤 + 分类折叠，20 个工具按文本/图片/音频/视频/PDF/UI/浏览器/开发工具分组导航。
 
 ## 运行方式
 
@@ -50,6 +57,7 @@ bfe-tools 支持三种运行方式：
 | CSS 方案 | UnoCSS + CSS Custom Properties（设计 token） |
 | 动画引擎 | Anime.js v4 |
 | 后端框架 | Python + FastAPI |
+| 浏览器引擎 | Playwright（Chromium headless） |
 | 桌面端 | Tauri v2（Rust） |
 | 包管理 | pnpm（前端/桌面）/ uv（后端） |
 | 提交规范 | Conventional Commits |
@@ -106,8 +114,8 @@ bfe-tools/
 │   │   ├── components/
 │   │   │   ├── layout/        # 布局组件（AppSidebar）
 │   │   │   ├── tools/
-│   │   │   │   ├── backend/   # 后端工具表单（TtsForm/WatermarkRemovalForm/MediaConvertForm）
-│   │   │   │   ├── pure/      # 纯前端工具（AnimeLab/JsonFormatter/QrcodeGenerator…）
+│   │   │   │   ├── backend/   # 后端工具表单（PdfToolkit/Screenshot/ImageBatch/VideoKeyframe/HtmlToImage…）
+│   │   │   │   ├── pure/      # 纯前端工具（AnimeLab/JsonFormatter/SvgEditor…）
 │   │   │   │   └── shared/    # 共享组件（CopyButton/ToolHeader）
 │   │   │   └── ui/            # 通用 UI（ResultDownload）
 │   │   ├── hooks/             # 组合式函数
@@ -138,15 +146,22 @@ bfe-tools/
 
 ## 引擎说明
 
-五个处理引擎均为纯 Python pip 包，**无需任何系统级依赖**：
+10 个处理引擎，核心依赖为纯 Python pip 包：
 
-| 引擎 | 包 | 大小 | 特点 |
-|------|-----|------|------|
-| STT | `faster-whisper` | ~145MB（base） | CPU 快 2-4 倍，内置 VAD |
-| TTS | `edge-tts` | 无模型文件，**磁盘缓存** | 微软免费，20 种声音；相同参数秒播 |
-| OCR | `easyocr` + `torch` | ~300MB | CPU 推理，中英文 |
-| 转码 | `av`（PyAV） | ~10MB | 内置 FFmpeg C 库 |
-| 去水印 | `opencv-python-headless` + `numpy` | ~148MB | NS 算法 + LAB 色彩 + 直方图匹配 |
+| 引擎 | 包 | 特点 |
+|------|-----|------|
+| STT | `faster-whisper` | 语音转文字，CPU 快 2-4 倍，内置 VAD |
+| TTS | `edge-tts` | 文字转语音，微软免费，20 种声音，磁盘缓存秒播 |
+| OCR | `easyocr` + `torch` | 图片文字识别，CPU 推理，中英文 |
+| 转码 | `av`（PyAV） | 图片/视频/音频格式转换，内置 FFmpeg C 库 |
+| 去水印 | `opencv-python-headless` | NS 算法 + LAB 色彩空间 + 直方图匹配 |
+| PDF | `pymupdf`（fitz） | PDF 拆分/合并/压缩/文字提取/图片提取 |
+| 截图 | `playwright` | 多分辨率网页截图 + SSRF 安全防护 |
+| 批处理 | `pillow` | 图片批量 resize / 格式转换 / 多倍图 |
+| 取帧 | `av`（PyAV） | 视频关键帧提取，支持间隔/时间点模式 |
+| HTML渲染 | `playwright` | HTML/CSS → 高清截图，独立 BrowserContext 沙箱 |
+
+> Playwright 需额外安装 Chromium：`playwright install chromium`
 
 ## 开发约定
 

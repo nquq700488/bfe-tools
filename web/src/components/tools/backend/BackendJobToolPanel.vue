@@ -12,6 +12,11 @@ import FileUpload from '@/components/ui/FileUpload.vue'
 import MediaConvertForm from './MediaConvertForm.vue'
 import WatermarkRemovalForm from './WatermarkRemovalForm.vue'
 import TtsForm from './TtsForm.vue'
+import PdfToolkitForm from './PdfToolkitForm.vue'
+import ResponsiveScreenshotForm from './ResponsiveScreenshotForm.vue'
+import ImageBatchForm from './ImageBatchForm.vue'
+import VideoKeyframeForm from './VideoKeyframeForm.vue'
+import HtmlToImageForm from './HtmlToImageForm.vue'
 import ResultDownload from '@/components/ui/ResultDownload.vue'
 import { useFileUpload } from '@/hooks/useFileUpload'
 import { useTaskPolling } from '@/hooks/useTaskPolling'
@@ -47,6 +52,8 @@ const {
   resultFileName: jobResultFileName,
   resultText: jobResultText,
   ocrSegments: jobOcrSegments,
+  outputFiles: jobOutputFiles,
+  resultMetadata: jobResultMetadata,
   start: startPolling,
   stop: stopPolling,
 } = useTaskPolling()
@@ -93,6 +100,16 @@ const isOcrTool = computed(() => props.tool.id === 'image-ocr')
 const isSttTool = computed(() => props.tool.id === 'speech-to-text')
 const isConvertTool = computed(() => props.tool.id === 'media-convert')
 const isWatermarkTool = computed(() => props.tool.id === 'watermark-removal')
+const isPdfTool = computed(() => props.tool.id === 'pdf-toolkit')
+const isScreenshotTool = computed(() => props.tool.id === 'responsive-screenshot')
+const isImageBatchTool = computed(() => props.tool.id === 'image-batch')
+const isKeyframeTool = computed(() => props.tool.id === 'video-keyframe')
+const isHtmlToImageTool = computed(() => props.tool.id === 'html-to-image')
+
+/** 是否需要文件上传 */
+const needsUpload = computed(() =>
+  props.tool.inputType === 'file' || props.tool.inputType === 'file+text'
+)
 
 /** 转换结果的输出类别（用于选择预览方式：图片/音频/视频） */
 const convertOutputCategory = computed<'image' | 'video' | 'audio' | null>(() => {
@@ -100,6 +117,19 @@ const convertOutputCategory = computed<'image' | 'video' | 'audio' | null>(() =>
   return INPUT_CATEGORY_MAP[ext] || null
 })
 const isBusy = computed(() => phase.value === 'uploading' || phase.value === 'processing')
+
+/** 处理中的状态文字 */
+const processingMessage = computed(() => {
+  if (isConvertTool.value) return '正在转换格式，请稍候...'
+  if (isWatermarkTool.value) return '正在去除水印，请稍候...'
+  if (isPdfTool.value) return '正在处理 PDF，请稍候...'
+  if (isScreenshotTool.value) return '正在截图，请稍候...'
+  if (isImageBatchTool.value) return '正在批量处理图片，请稍候...'
+  if (isKeyframeTool.value) return '正在提取关键帧，请稍候...'
+  if (isHtmlToImageTool.value) return '正在渲染截图，请稍候...'
+  if (isSttTool.value) return '正在识别中，请稍候...'
+  return '正在处理中，请稍候...'
+})
 
 /** TTS 提交中标志（防止错误闪现） */
 const ttsSubmitting = ref(false)
@@ -220,7 +250,7 @@ async function handleTtsSubmit(payload: {
   }
 }
 
-async function createAndPollJob(payload: { toolId: string; uploadId: string; params?: Record<string, string> }) {
+async function createAndPollJob(payload: { toolId: string; uploadId?: string; params?: Record<string, string> }) {
   const [createResult, createErr] = await to(
     apiClient.post<JobCreateResponse>('/api/v1/jobs', payload)
   )
@@ -241,6 +271,97 @@ async function createAndPollJob(payload: { toolId: string; uploadId: string; par
 
 function handleCancelUpload(_fileId: string) { phase.value = 'idle' }
 function handleRetry() { stopPolling(); phase.value = 'idle'; showResult.value = false; currentJobId.value = null; ocrText.value = null; ocrSegments.value = null; ocrImageUrl.value = null; ttsSubmitting.value = false }
+
+/** PDF 工具箱：上传文件 → 创建任务 */
+async function handlePdfSubmit(payload: {
+  file: File; action: string; pages?: string; quality?: number
+}) {
+  showResult.value = false; currentJobId.value = null
+  resultFileNameLocal.value = payload.file.name
+  phase.value = 'uploading'
+  const uploadId = await uploadFile(payload.file)
+  if (!uploadId) { phase.value = 'error'; return }
+  phase.value = 'processing'
+  const params: Record<string, string> = { action: payload.action }
+  if (payload.pages) params.pages = payload.pages
+  if (payload.quality !== undefined) params.quality = String(payload.quality)
+  await createAndPollJob({ toolId: toolId.value, uploadId, params })
+}
+
+/** 多分辨率截图：不走上传，直接 params 传 url */
+async function handleScreenshotSubmit(payload: {
+  url: string; widths: number[]; fullPage: boolean; format: string
+}) {
+  showResult.value = false; currentJobId.value = null
+  phase.value = 'processing'
+  await createAndPollJob({
+    toolId: toolId.value,
+    params: {
+      url: payload.url,
+      widths: payload.widths.join(','),
+      full_page: payload.fullPage ? 'true' : 'false',
+      format: payload.format,
+    },
+  })
+}
+
+/** 图片批量处理：上传文件 → 创建任务 */
+async function handleImageBatchSubmit(payload: {
+  file: File; widths: number[]; format: string; quality: number; suffixRule: string
+}) {
+  showResult.value = false; currentJobId.value = null
+  resultFileNameLocal.value = payload.file.name
+  phase.value = 'uploading'
+  const uploadId = await uploadFile(payload.file)
+  if (!uploadId) { phase.value = 'error'; return }
+  phase.value = 'processing'
+  await createAndPollJob({
+    toolId: toolId.value,
+    uploadId,
+    params: {
+      widths: payload.widths.join(','),
+      format: payload.format,
+      quality: String(payload.quality),
+      suffix_rule: payload.suffixRule,
+    },
+  })
+}
+
+/** 视频取帧：上传 → 创建任务 */
+async function handleKeyframeSubmit(payload: {
+  file: File; mode: string; interval?: number; timestamps?: string
+  format: string; width?: number
+}) {
+  showResult.value = false; currentJobId.value = null
+  resultFileNameLocal.value = payload.file.name
+  phase.value = 'uploading'
+  const uploadId = await uploadFile(payload.file)
+  if (!uploadId) { phase.value = 'error'; return }
+  phase.value = 'processing'
+  const params: Record<string, string> = { mode: payload.mode, format: payload.format }
+  if (payload.interval) params.interval = String(payload.interval)
+  if (payload.timestamps) params.timestamps = payload.timestamps
+  if (payload.width) params.width = String(payload.width)
+  await createAndPollJob({ toolId: toolId.value, uploadId, params })
+}
+
+/** HTML 渲染截图：不走上传，直接 params 传 html/css */
+async function handleHtmlToImageSubmit(payload: {
+  html: string; css: string; width: number; fullPage: boolean; format: string
+}) {
+  showResult.value = false; currentJobId.value = null
+  phase.value = 'processing'
+  await createAndPollJob({
+    toolId: toolId.value,
+    params: {
+      html: payload.html,
+      css: payload.css,
+      width: String(payload.width),
+      full_page: payload.fullPage ? 'true' : 'false',
+      format: payload.format,
+    },
+  })
+}
 
 /** 格式化秒数为 mm:ss */
 function formatTime(seconds: number): string {
@@ -304,8 +425,82 @@ async function copyToClipboard(text: string): Promise<void> {
 
     <NSpace vertical :size="20">
       <!-- ================================================ -->
+      <!-- responsive-screenshot：无文件上传，文本输入 URL  -->
+      <template v-if="isScreenshotTool">
+        <ResponsiveScreenshotForm
+          :tool="props.tool"
+          :is-busy="isBusy"
+          @submit="handleScreenshotSubmit"
+        />
+
+        <div v-if="isBusy" class="loading-bar">
+          <span class="loading-bar-spinner" />
+          <span class="loading-bar-text">{{ processingMessage }}</span>
+        </div>
+
+        <NAlert v-if="phase === 'error'" type="error" :bordered="false">
+          {{ jobError || '处理失败，请重试' }}
+        </NAlert>
+        <NButton v-if="phase === 'error'" size="small" @click="handleRetry">重试</NButton>
+
+        <ResultDownload
+          v-if="showResult && resultDownloadUrl"
+          :download-url="resultDownloadUrl"
+          :file-name="downloadFileName || 'screenshots.zip'"
+        />
+
+        <!-- 截图结果 -->
+        <div v-if="showResult && isScreenshotTool && resultDownloadUrl" class="result-meta-card">
+          <p class="rmc-title">截图完成</p>
+          <p class="rmc-desc" v-if="jobResultMetadata">
+            {{ (jobResultMetadata.widths as number[])?.length }} 个分辨率：
+            {{ (jobResultMetadata.widths as number[])?.join('px, ') }}px
+          </p>
+          <div v-if="jobResultMetadata?.srcset" class="rmc-code">
+            <div class="rmc-code-header">
+              <span class="rmc-code-label">srcset</span>
+              <button class="rmc-copy-btn" @click="copyToClipboard(jobResultMetadata.srcset as string)">复制</button>
+            </div>
+            <pre class="rmc-code-block">{{ jobResultMetadata.srcset }}</pre>
+          </div>
+        </div>
+      </template>
+
+      <!-- ================================================ -->
+      <!-- html-to-image：无文件上传，代码输入            -->
+      <template v-else-if="isHtmlToImageTool">
+        <HtmlToImageForm
+          :tool="props.tool"
+          :is-busy="isBusy"
+          @submit="handleHtmlToImageSubmit"
+        />
+
+        <div v-if="isBusy" class="loading-bar">
+          <span class="loading-bar-spinner" />
+          <span class="loading-bar-text">{{ processingMessage }}</span>
+        </div>
+
+        <NAlert v-if="phase === 'error'" type="error" :bordered="false">
+          {{ jobError || '处理失败，请重试' }}
+        </NAlert>
+        <NButton v-if="phase === 'error'" size="small" @click="handleRetry">重试</NButton>
+
+        <ResultDownload
+          v-if="showResult && resultDownloadUrl"
+          :download-url="resultDownloadUrl"
+          :file-name="downloadFileName || 'render.png'"
+        />
+
+        <!-- HTML 渲染截图预览 -->
+        <div v-if="showResult && isHtmlToImageTool && resultDownloadUrl" class="result-preview-card">
+          <p class="text-xs text-neutral-500 mb-2">预览</p>
+          <img :src="resultDownloadUrl" :alt="downloadFileName" class="result-preview-image" />
+        </div>
+      </template>
+
+      <!-- ================================================ -->
       <!-- TTS 工具 -->
-      <template v-if="isTextTool">
+      <template v-else-if="isTextTool">
         <TtsForm :tool="props.tool" :is-busy="isBusy" @submit="handleTtsSubmit" />
 
         <!-- 生成进度 -->
@@ -355,6 +550,33 @@ async function copyToClipboard(text: string): Promise<void> {
           />
         </template>
 
+        <!-- pdf-toolkit: PDF 处理 -->
+        <template v-else-if="isPdfTool">
+          <PdfToolkitForm
+            :tool="props.tool"
+            :is-busy="isBusy"
+            @submit="handlePdfSubmit"
+          />
+        </template>
+
+        <!-- image-batch: 图片批处理 -->
+        <template v-else-if="isImageBatchTool">
+          <ImageBatchForm
+            :tool="props.tool"
+            :is-busy="isBusy"
+            @submit="handleImageBatchSubmit"
+          />
+        </template>
+
+        <!-- video-keyframe: 视频取帧 -->
+        <template v-else-if="isKeyframeTool">
+          <VideoKeyframeForm
+            :tool="props.tool"
+            :is-busy="isBusy"
+            @submit="handleKeyframeSubmit"
+          />
+        </template>
+
         <!-- 其他文件工具：普通上传流程 -->
         <template v-else>
           <div :class="{ 'opacity-50 pointer-events-none': isBusy }">
@@ -371,7 +593,7 @@ async function copyToClipboard(text: string): Promise<void> {
         <!-- 加载提示 -->
         <div v-if="isBusy" class="loading-bar">
           <span class="loading-bar-spinner" />
-          <span class="loading-bar-text">{{ phase === 'uploading' ? '正在上传...' : isConvertTool ? '正在转换格式，请稍候...' : isWatermarkTool ? '正在去除水印，请稍候...' : '正在识别中，请稍候...' }}</span>
+          <span class="loading-bar-text">{{ phase === 'uploading' ? '正在上传...' : processingMessage }}</span>
         </div>
 
         <!-- 错误 -->
@@ -487,6 +709,53 @@ async function copyToClipboard(text: string): Promise<void> {
               <img :src="resultDownloadUrl" class="convert-preview-image" alt="去水印结果" />
             </div>
           </div>
+        </div>
+
+        <!-- 视频取帧结果预览 -->
+        <div v-if="showResult && isKeyframeTool && jobResultMetadata?.frame_files" class="result-preview-card">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-semibold text-neutral-700">
+              预览（{{ jobResultMetadata.frame_count }} 帧，{{ jobResultMetadata.duration }}s）
+            </span>
+          </div>
+          <div class="keyframe-grid">
+            <div
+              v-for="ff in (jobResultMetadata.frame_files as Array<{ file_name: string; timestamp: number }>).slice(0, 12)"
+              :key="ff.file_name"
+              class="keyframe-chip"
+            >
+              <img
+                :src="`${resolveBackendUrl('/api/v1/jobs/' + currentJobId + '/result')}?file=${ff.file_name}`"
+                :alt="`${ff.timestamp}s`"
+                class="keyframe-thumb"
+                loading="lazy"
+              />
+              <span class="keyframe-ts">{{ ff.timestamp }}s</span>
+            </div>
+          </div>
+          <p v-if="jobResultMetadata.frame_count > 12" class="text-xs text-neutral-400 mt-3">
+            仅展示前 12 帧，下载 ZIP 获取全部
+          </p>
+        </div>
+
+        <!-- 图片批处理结果预览 -->
+        <div v-if="showResult && isImageBatchTool && resultDownloadUrl" class="result-meta-card">
+          <p class="rmc-title">处理完成</p>
+          <p class="rmc-desc" v-if="jobResultMetadata">
+            {{ jobResultMetadata.total_outputs || jobResultMetadata.files?.length }} 张图片
+          </p>
+          <div v-if="jobResultMetadata?.srcset" class="rmc-code">
+            <div class="rmc-code-header">
+              <span class="rmc-code-label">srcset</span>
+              <button class="rmc-copy-btn" @click="copyToClipboard(jobResultMetadata.srcset as string)">复制</button>
+            </div>
+            <pre class="rmc-code-block">{{ jobResultMetadata.srcset }}</pre>
+          </div>
+        </div>
+
+        <!-- PDF 工具箱结果 -->
+        <div v-if="showResult && isPdfTool && resultDownloadUrl" class="result-meta-card">
+          <p class="rmc-title">PDF 处理完成</p>
         </div>
 
         <!-- 结果 -->
@@ -779,5 +1048,120 @@ async function copyToClipboard(text: string): Promise<void> {
   font-size: var(--text-sm);
   color: var(--color-neutral-700);
   line-height: var(--leading-relaxed);
+}
+
+/* ===== 视频取帧缩略图 ===== */
+.keyframe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.keyframe-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.keyframe-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--color-neutral-100);
+  background: var(--color-neutral-50);
+}
+.keyframe-ts {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-neutral-400);
+}
+
+/* ===== 新工具结果预览 ===== */
+
+/* 图片预览卡片 */
+.result-preview-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.result-preview-image {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 8px;
+  border: 1px solid var(--color-neutral-100);
+  display: block;
+}
+
+/* 元数据卡片 */
+.result-meta-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.rmc-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-neutral-800);
+  margin: 0 0 8px;
+}
+.rmc-desc {
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  margin: 0 0 12px;
+}
+
+/* srcset 代码块 */
+.rmc-code {
+  margin-top: 12px;
+  border: 1px solid var(--color-neutral-100);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rmc-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--color-neutral-50);
+  border-bottom: 1px solid var(--color-neutral-100);
+}
+.rmc-code-label {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-neutral-400);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.rmc-copy-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 5px;
+  background: var(--color-white);
+  font-size: var(--text-xs);
+  color: var(--color-neutral-600);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.rmc-copy-btn:hover {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-600);
+}
+.rmc-code-block {
+  padding: 12px 14px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-neutral-700);
+  background: var(--color-white);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  user-select: text;
 }
 </style>
