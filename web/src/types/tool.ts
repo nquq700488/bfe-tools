@@ -10,7 +10,7 @@
 export type ToolMode = 'backend-job' | 'client-only'
 
 /** 工具分类 */
-export type ToolCategory = 'audio' | 'image' | 'video' | 'text' | 'ui' | 'general'
+export type ToolCategory = 'audio' | 'image' | 'video' | 'text' | 'ui' | 'general' | 'pdf' | 'browser'
 
 /** 格式类别 */
 export type FormatCategory = 'image' | 'video' | 'audio'
@@ -112,6 +112,11 @@ export type BackendToolId =
   | 'image-ocr'
   | 'media-convert'
   | 'watermark-removal'
+  | 'pdf-toolkit'
+  | 'responsive-screenshot'
+  | 'image-batch'
+  | 'video-keyframe'
+  | 'html-to-image'
 
 // ============================================================
 // 任务/上传状态类型（不变）

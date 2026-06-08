@@ -74,6 +74,26 @@ export const ALLOWED_FILE_TYPES: Record<
       'image/bmp',
     ],
   },
+  'pdf-toolkit': {
+    extensions: ['pdf', 'zip'],
+    mimeTypes: ['application/pdf', 'application/zip'],
+  },
+  'responsive-screenshot': {
+    extensions: [],
+    mimeTypes: [],
+  },
+  'image-batch': {
+    extensions: ['zip', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'],
+    mimeTypes: ['application/zip', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'],
+  },
+  'video-keyframe': {
+    extensions: ['mp4', 'webm', 'avi', 'mov', 'mkv'],
+    mimeTypes: ['video/mp4', 'video/webm', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska'],
+  },
+  'html-to-image': {
+    extensions: [],
+    mimeTypes: [],
+  },
 }
 
 /**
@@ -85,6 +105,11 @@ export const MAX_FILE_SIZES: Record<BackendToolId, number> = {
   'image-ocr': 20 * 1024 * 1024,       // 20MB
   'media-convert': 2 * 1024 * 1024 * 1024, // 2GB
   'watermark-removal': 20 * 1024 * 1024, // 20MB
+  'pdf-toolkit': 200 * 1024 * 1024,        // 200MB
+  'responsive-screenshot': 0,              // 无文件上传
+  'image-batch': 500 * 1024 * 1024,        // 500MB（zip 包）
+  'video-keyframe': 2 * 1024 * 1024 * 1024, // 2GB
+  'html-to-image': 0,                       // 无文件上传
 }
 
 /**

@@ -39,10 +39,10 @@ export interface UploadCompleteRequest {
   uploadId: string
 }
 
-/** 任务创建请求 */
+/** 任务创建请求（uploadId 可选 — 截图/HTML渲染等工具无需上传文件） */
 export interface JobCreateRequest {
   toolId: string
-  uploadId: string
+  uploadId?: string
   params?: Record<string, string>
 }
 
@@ -63,6 +63,13 @@ export interface OcrSegment {
   bbox: [number, number, number, number]
 }
 
+/** 输出文件描述 */
+export interface OutputFile {
+  fileName: string
+  fileSize: number
+  url: string
+}
+
 /** 任务状态查询响应 */
 export interface JobStatusResponse {
   jobId: string
@@ -72,6 +79,8 @@ export interface JobStatusResponse {
   resultFileName: string | null
   resultText: string | null
   ocrSegments: OcrSegment[] | null
+  outputFiles: OutputFile[] | null
+  resultMetadata: Record<string, unknown> | null
   error: string | null
   createdAt: string
 }
