@@ -7,7 +7,6 @@
 - 序列化时 by_alias=True 自动输出 camelCase JSON
 """
 
-import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -87,7 +86,7 @@ class JobCreateRequest(BaseSchema):
     """创建处理任务请求 — 仅暴露公开字段，file_path 由后端内部填充"""
 
     tool_id: str = Field(description="工具标识（如 speech-to-text）")
-    upload_id: str = Field(description="关联的上传任务 ID")
+    upload_id: str | None = Field(default=None, description="关联的上传任务 ID（截图/HTML渲染等工具不需要上传文件）")
     params: dict | None = Field(default=None, description="工具特定参数（如目标格式）")
 
 
@@ -109,6 +108,8 @@ class JobStatusResponse(BaseSchema):
     result_file_name: str | None = Field(default=None, description="结果文件名")
     result_text: str | None = Field(default=None, description="识别文本（OCR/TTS等引擎返回的文本内容）")
     ocr_segments: list[dict] | None = Field(default=None, description="OCR 文字段落详情（含文字、坐标、置信度）")
+    output_files: list[dict] | None = Field(default=None, description="多输出文件列表，每项 {file_name, file_size, url}")
+    result_metadata: dict | None = Field(default=None, description="结构化元数据（如 img srcset、PDF 提取文字、截图分辨率列表等）")
     error: str | None = Field(default=None, description="错误消息（仅在 failed 状态）")
     created_at: str = Field(description="创建时间（ISO 8601）")
 

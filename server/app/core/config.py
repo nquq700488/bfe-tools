@@ -108,5 +108,25 @@ class Settings(BaseSettings):
     FFMPEG_PATH: str = "ffmpeg"
     """FFmpeg 可执行文件路径 — 后续媒体转换工具使用"""
 
+    # === Playwright 浏览器配置 ===
+    PLAYWRIGHT_CONCURRENCY: int = 2
+    """Playwright 最大并发截图任务数"""
+
+    PLAYWRIGHT_NAVIGATION_TIMEOUT: int = 30
+    """Playwright 页面导航超时（秒）"""
+
+    PLAYWRIGHT_MAX_PAGE_HEIGHT: int = 20000
+    """Playwright 截图最大页面高度（px）"""
+
+    # === zip 安全配置 ===
+    ZIP_MAX_EXTRACT_SIZE: int = 500 * 1024 * 1024  # 500MB
+    """zip 解压总大小上限（字节）"""
+
+    ZIP_MAX_FILE_COUNT: int = 1000
+    """zip 内最大文件数量"""
+
+    ZIP_MAX_DEPTH: int = 1
+    """zip 嵌套深度上限（1 = 不允许嵌套 zip）"""
+
 
 settings = Settings()

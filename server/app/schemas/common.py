@@ -4,14 +4,14 @@
 与前端 web/src/types/api.ts 中的 APIResponse 一一对应。
 """
 
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
 
-class APIResponse(BaseModel, Generic[T]):
+class APIResponse[T](BaseModel):
     """统一 API 响应信封"""
 
     success: bool = Field(description="请求是否成功")
@@ -28,7 +28,7 @@ class PageMeta(BaseModel):
     page_size: int = Field(description="每页条数")
 
 
-class Result(Generic[T]):
+class Result[T]:
     """
     Go 风格结果封装 — 对标前端 to() 模式
 

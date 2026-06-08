@@ -18,6 +18,7 @@ from app.api.v1 import router as v1_router
 from app.schemas.common import APIResponse
 from app.engine.ocr_engine import preload_ocr_reader
 from app.engine.stt_engine import preload_stt_model
+from app.lib.browser_manager import browser_manager
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ async def lifespan(app: FastAPI):
     preload_ocr_reader()
     # 预热 STT 引擎
     preload_stt_model()
+    # 启动 Playwright 浏览器（未安装 playwright 时静默跳过）
+    await browser_manager.start()
 
     try:
         yield
@@ -59,6 +62,7 @@ async def lifespan(app: FastAPI):
         logger.info(f"🛑 {settings.APP_NAME} 收到关闭信号")
     finally:
         # 确保清理逻辑始终执行
+        await browser_manager.stop()
         logger.info(f"🧹 {settings.APP_NAME} 清理完成")
 
 

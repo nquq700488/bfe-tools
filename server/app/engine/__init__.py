@@ -27,6 +27,7 @@ class EngineResult:
     data: dict | None = None
     error: str | None = None
     output_files: list[str] = field(default_factory=list)
+    metadata: dict | None = None
 
 
 # === 抽象引擎接口 ===
@@ -46,12 +47,12 @@ class BaseEngine(ABC):
         ...
 
     @abstractmethod
-    async def execute(self, input_path: str, params: dict) -> EngineResult:
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
         """
         执行引擎处理
 
         Args:
-            input_path: 输入文件路径
+            input_path: 输入文件路径（可为 None — 部分工具不需要上传文件）
             params: 处理参数
 
         Returns:
@@ -59,18 +60,20 @@ class BaseEngine(ABC):
         """
         ...
 
-    async def validate_input(self, input_path: str) -> Result[bool]:
+    async def validate_input(self, input_path: str | None) -> Result[bool]:
         """
         校验输入文件（子类可覆盖）
 
         Args:
-            input_path: 输入文件路径
+            input_path: 输入文件路径（可为 None）
 
         Returns:
             Result[bool]
         """
         import os
 
+        if input_path is None:
+            return Result.failure("输入文件路径为空")
         if not os.path.isfile(input_path):
             return Result.failure(f"输入文件不存在: {input_path}")
         return Result.success(True)
@@ -84,7 +87,7 @@ class SpeechToTextEngine(BaseEngine):
         return "speech-to-text"
 
     @abstractmethod
-    async def execute(self, input_path: str, params: dict) -> EngineResult:
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
         """将音频文件转为文字"""
         ...
 
@@ -97,7 +100,7 @@ class TextToSpeechEngine(BaseEngine):
         return "text-to-speech"
 
     @abstractmethod
-    async def execute(self, input_path: str, params: dict) -> EngineResult:
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
         """将文本转为语音"""
         ...
 
@@ -110,7 +113,7 @@ class OcrEngine(BaseEngine):
         return "image-ocr"
 
     @abstractmethod
-    async def execute(self, input_path: str, params: dict) -> EngineResult:
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
         """从图片中提取文字"""
         ...
 
@@ -123,8 +126,86 @@ class TranscodeEngine(BaseEngine):
         return "media-convert"
 
     @abstractmethod
-    async def execute(self, input_path: str, params: dict) -> EngineResult:
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
         """将媒体文件转换为目标格式"""
+        ...
+
+
+class WatermarkEngine(BaseEngine):
+    """去水印引擎抽象"""
+
+    @property
+    def engine_name(self) -> str:
+        return "watermark-removal"
+
+    @abstractmethod
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
+        """去除图片/视频水印"""
+        ...
+
+
+class PdfEngine(BaseEngine):
+    """PDF 工具箱引擎抽象"""
+
+    @property
+    def engine_name(self) -> str:
+        return "pdf-toolkit"
+
+    @abstractmethod
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
+        """PDF 合并/拆分/提取文字/转换格式"""
+        ...
+
+
+class ResponsiveScreenshotEngine(BaseEngine):
+    """多分辨率截图引擎抽象"""
+
+    @property
+    def engine_name(self) -> str:
+        return "responsive-screenshot"
+
+    @abstractmethod
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
+        """对 URL 进行多分辨率截图，生成 srcset 代码"""
+        ...
+
+
+class ImageBatchEngine(BaseEngine):
+    """图片批处理引擎抽象"""
+
+    @property
+    def engine_name(self) -> str:
+        return "image-batch"
+
+    @abstractmethod
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
+        """批量图片压缩/格式转换/尺寸调整"""
+        ...
+
+
+class VideoKeyframeEngine(BaseEngine):
+    """视频关键帧提取引擎抽象"""
+
+    @property
+    def engine_name(self) -> str:
+        return "video-keyframe"
+
+    @abstractmethod
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
+        """从视频中提取关键帧"""
+        ...
+
+
+class HtmlToImageEngine(BaseEngine):
+    """HTML 渲染截图引擎抽象"""
+
+    @property
+    def engine_name(self) -> str:
+        return "html-to-image"
+
+    @abstractmethod
+    async def execute(self, input_path: str | None, params: dict) -> EngineResult:
+        """将 HTML/CSS 渲染为图片"""
         ...
 
 
@@ -179,15 +260,26 @@ class EngineRegistry:
 # 全局注册中心单例
 engine_registry = EngineRegistry()
 
-# 注册内置引擎
-from app.engine.ocr_engine import OcrEngine
-from app.engine.tts_engine import TtsEngine
-from app.engine.stt_engine import SpeechToTextEngine
-from app.engine.transcode_engine import TranscodeEngine
-from app.engine.watermark_engine import WatermarkEngine
+# 注册所有引擎实例
+# 引擎文件自身依赖 app.engine，必须延迟 import 避免循环依赖（见 pyproject.toml per-file-ignores）
+from app.engine.ocr_engine import OcrEngine as _OcrEngine
+from app.engine.tts_engine import TtsEngine as _TtsEngine
+from app.engine.stt_engine import SpeechToTextEngine as _SttEngine
+from app.engine.transcode_engine import TranscodeEngine as _TranscodeEngine
+from app.engine.watermark_engine import WatermarkEngine as _WatermarkEngine
+from app.engine.pdf_engine import PdfEngineImpl as _PdfEngine
+from app.engine.screenshot_engine import ScreenshotEngine as _ScreenshotEngine
+from app.engine.image_batch_engine import ImageBatchEngineImpl as _ImageBatchEngine
+from app.engine.video_keyframe_engine import VideoKeyframeEngineImpl as _KeyframeEngine
+from app.engine.html_to_image_engine import HtmlToImageEngineImpl as _HtmlToImageEngine
 
-engine_registry.register(OcrEngine())
-engine_registry.register(TtsEngine())
-engine_registry.register(SpeechToTextEngine())
-engine_registry.register(TranscodeEngine())
-engine_registry.register(WatermarkEngine())
+engine_registry.register(_OcrEngine())
+engine_registry.register(_TtsEngine())
+engine_registry.register(_SttEngine())
+engine_registry.register(_TranscodeEngine())
+engine_registry.register(_WatermarkEngine())
+engine_registry.register(_PdfEngine())
+engine_registry.register(_ScreenshotEngine())
+engine_registry.register(_ImageBatchEngine())
+engine_registry.register(_KeyframeEngine())
+engine_registry.register(_HtmlToImageEngine())

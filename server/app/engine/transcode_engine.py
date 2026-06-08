@@ -8,7 +8,6 @@ PyAV 是 FFmpeg C 库的 Python 绑定，无需系统安装 FFmpeg。
 import asyncio
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
 
 import av

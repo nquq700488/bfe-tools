@@ -109,7 +109,7 @@ class WatermarkEngine(BaseEngine):
         if actual_src_h >= h // 2 and w > 0:
             # 从上方取纹理块
             src_roi = result[src_y:y, x:x + w]
-            src_mask = np.ones((actual_src_h, w), dtype=np.uint8) * 255
+            np.ones((actual_src_h, w), dtype=np.uint8) * 255
             center = (x + w // 2, y + h // 2)
 
             # 使用 NORMAL_CLONE 将上方纹理融合到水印区域

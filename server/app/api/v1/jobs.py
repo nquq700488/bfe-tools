@@ -90,6 +90,8 @@ async def get_job_status(job_id: str) -> APIResponse[JobStatusResponse]:
             result_file_name=job.get("result_file_name"),
             result_text=job.get("result_text"),
             ocr_segments=job.get("ocr_segments"),
+            output_files=job.get("output_files") or None,
+            result_metadata=job.get("result_metadata"),
             error=job.get("error"),
             created_at=job["created_at"],
         ),
@@ -182,13 +184,24 @@ def _file_response(file_path: str, file_name: str, download: bool | None) -> Fil
 
 
 @router.get("/{job_id}/result", summary="下载/播放结果文件")
-async def download_result(job_id: str, download: bool | None = None):
+async def download_result(
+    job_id: str,
+    download: bool | None = None,
+    file: str | None = None,
+):
     """
     获取任务处理结果文件
 
-    音频/图片/视频默认内联播放（?download=1 强制下载）。
-    优先内存 → 降级 results 目录搜索（容错重启）。
+    - 默认返回主输出文件（如 zip 包）
+    - ?file=<name> 返回指定输出文件（如视频取帧的单个帧图片）
+    - 音频/图片/视频默认内联播放（?download=1 强制下载）
     """
+    if file:
+        result = job_service.get_output_file_by_name(job_id, file)
+        if result.ok:
+            file_path, file_name = result.data
+            return _file_response(file_path, file_name, True)
+
     result = job_service.get_result_path(job_id)
 
     if result.ok:

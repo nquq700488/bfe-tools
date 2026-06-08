@@ -23,6 +23,8 @@ dependencies = [
     "av>=14.0.0",
     "numpy>=1.26.0",
     "pillow>=11.0.0",
+    "pymupdf>=1.25.0",
+    "playwright>=1.50.0",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +57,9 @@ select = [
     "SIM", # flake8-simplify
 ]
 ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"app/engine/__init__.py" = ["E402", "F811", "I001"]  # 循环依赖必须延迟 import；抽象类名冲突；逻辑注册顺序非字母序
 
 [tool.mypy]
 strict = true
