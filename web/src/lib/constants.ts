@@ -131,6 +131,7 @@ export const CLIENT_TOOL_MAX_INPUT_SIZES: Record<ClientToolId, number> = {
   'color-converter': 0,
   'cron-parser': 0,
   'csv-to-json': 10 * 1024 * 1024,       // 10MB
+  'file-preview': 200 * 1024 * 1024,      // 200MB
   'html-entity-codec': 1 * 1024 * 1024,  // 1MB
   'image-compression': 50 * 1024 * 1024, // 50MB
   'json-formatter': 10 * 1024 * 1024,    // 10MB

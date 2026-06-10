@@ -98,6 +98,7 @@ export type ClientToolId =
   | 'color-converter'
   | 'cron-parser'
   | 'csv-to-json'
+  | 'file-preview'
   | 'html-entity-codec'
   | 'image-compression'
   | 'json-formatter'

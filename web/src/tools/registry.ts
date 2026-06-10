@@ -405,6 +405,19 @@ export const toolRegistry = new Map<string, ToolDefinition>([
     },
   ],
   [
+    'file-preview',
+    {
+      id: 'file-preview',
+      name: '文件预览',
+      implementation: '浏览器端：原生 FileReader + URL.createObjectURL + [JSZip](https://stuk.github.io/jszip/)',
+      description: '拖拽文件即可预览：图片（支持缩放）、视频、音频、PDF、代码（语法高亮+行号）、ZIP 文件列表',
+      icon: '👁️',
+      route: '/tools/file-preview',
+      category: 'general',
+      mode: 'client-only',
+    },
+  ],
+  [
     'html-entity-codec',
     {
       id: 'html-entity-codec',

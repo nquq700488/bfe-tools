@@ -18,6 +18,7 @@ import AnimeLab from './AnimeLab.vue'
 import HtmlCssTool from './HtmlCssTool.vue'
 import ApiTester from './ApiTester.vue'
 import WsTester from './WsTester.vue'
+import FilePreview from './FilePreview.vue'
 
 const props = defineProps<{
   tool: ClientOnlyToolDefinition
@@ -39,6 +40,7 @@ const toolComponent = computed(() => {
     'html-css-tool': HtmlCssTool,
     'api-tester': ApiTester,
     'ws-tester': WsTester,
+    'file-preview': FilePreview,
   }
   return map[props.tool.id as ClientToolId]
 })
