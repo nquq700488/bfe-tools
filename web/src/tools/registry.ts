@@ -228,6 +228,82 @@ export const toolRegistry = new Map<string, ToolDefinition>([
     },
   ],
 
+  [
+    'url-to-pdf',
+    {
+      id: 'url-to-pdf',
+      name: '网页转 PDF',
+      implementation: 'Python：[Playwright](https://playwright.dev) 无头浏览器 `page.pdf()`',
+      description: '输入 URL，将网页渲染并导出为高质量 PDF 文件',
+      icon: '📑',
+      inputType: 'text',
+      accept: '',
+      maxSize: 0,
+      route: '/tools/url-to-pdf',
+      category: 'browser',
+      mode: 'backend-job',
+    },
+  ],
+  [
+    'perf-snapshot',
+    {
+      id: 'perf-snapshot',
+      name: '性能快照',
+      implementation: 'Python：[Playwright](https://playwright.dev) + Web Performance API',
+      description: '采集页面 Core Web Vitals、资源加载、网络耗时等性能指标',
+      icon: '⚡',
+      inputType: 'text',
+      accept: '',
+      maxSize: 0,
+      route: '/tools/perf-snapshot',
+      category: 'browser',
+      mode: 'backend-job',
+    },
+  ],
+
+  // ================================================================
+  // 纯前端工具（浏览器端计算，无后端依赖 或 调 Bun 服务）
+  // ================================================================
+  [
+    'html-css-tool',
+    {
+      id: 'html-css-tool',
+      name: 'HTML/CSS 工具',
+      implementation: 'Bun：[Elysia](https://elysiajs.com) 后端服务 — 压缩 / 格式化 / CSS 分析',
+      description: 'HTML/CSS 代码压缩与格式化，CSS 样式统计分析',
+      icon: '🧹',
+      route: '/tools/html-css-tool',
+      category: 'ui',
+      mode: 'client-only',
+    },
+  ],
+  [
+    'api-tester',
+    {
+      id: 'api-tester',
+      name: 'API 请求测试',
+      implementation: 'Bun：[Elysia](https://elysiajs.com) HTTP 代理 — 绕过浏览器 CORS 限制',
+      description: '发送 HTTP 请求，查看响应状态、Headers、Body 和耗时',
+      icon: '🔌',
+      route: '/tools/api-tester',
+      category: 'general',
+      mode: 'client-only',
+    },
+  ],
+  [
+    'ws-tester',
+    {
+      id: 'ws-tester',
+      name: 'WebSocket 测试',
+      implementation: 'Bun：[Elysia](https://elysiajs.com) WebSocket 代理 — 原生 ws 转发',
+      description: '连接 WebSocket 服务，发送消息并实时查看收发包日志',
+      icon: '🔗',
+      route: '/tools/ws-tester',
+      category: 'general',
+      mode: 'client-only',
+    },
+  ],
+
   // ================================================================
   // 纯前端工具（浏览器端计算，无后端依赖）
   // ================================================================

@@ -15,6 +15,9 @@ import CronParser from './CronParser.vue'
 import ImageCompression from './ImageCompression.vue'
 import SvgEditor from './svg-editor/SvgEditor.vue'
 import AnimeLab from './AnimeLab.vue'
+import HtmlCssTool from './HtmlCssTool.vue'
+import ApiTester from './ApiTester.vue'
+import WsTester from './WsTester.vue'
 
 const props = defineProps<{
   tool: ClientOnlyToolDefinition
@@ -33,6 +36,9 @@ const toolComponent = computed(() => {
     'cron-parser': CronParser,
     'image-compression': ImageCompression,
     'svg-editor': SvgEditor,
+    'html-css-tool': HtmlCssTool,
+    'api-tester': ApiTester,
+    'ws-tester': WsTester,
   }
   return map[props.tool.id as ClientToolId]
 })

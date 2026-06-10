@@ -4,7 +4,7 @@
  * 支持：拆分 / 合并 / 压缩 / 提取文字 / 提取图片
  */
 import { computed, ref } from 'vue'
-import { NButton, NInput, NSelect, NSlider } from 'naive-ui'
+import { NInput, NSlider } from 'naive-ui'
 import { validateFile, formatFileSize } from '@/lib/file-utils'
 import type { BackendJobToolDefinition } from '@/types/tool'
 

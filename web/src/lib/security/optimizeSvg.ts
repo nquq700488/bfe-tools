@@ -111,9 +111,6 @@ function stripEmptyAttrs(svg: string): string {
  */
 const PATH_D_RE = /(\sd\s*=\s*(["']))((?:\\\2|(?!\2)[\s\S])*?)\2/gi
 
-// SVG 路径命令字母（不区分大小写）
-const PATH_CMD = /[achlmqstvz]/i
-
 /**
  * 精简路径数据中的数字
  *

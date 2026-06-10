@@ -17,6 +17,8 @@ import ResponsiveScreenshotForm from './ResponsiveScreenshotForm.vue'
 import ImageBatchForm from './ImageBatchForm.vue'
 import VideoKeyframeForm from './VideoKeyframeForm.vue'
 import HtmlToImageForm from './HtmlToImageForm.vue'
+import UrlToPdfForm from './UrlToPdfForm.vue'
+import PerfSnapshotForm from './PerfSnapshotForm.vue'
 import ResultDownload from '@/components/ui/ResultDownload.vue'
 import { useFileUpload } from '@/hooks/useFileUpload'
 import { useTaskPolling } from '@/hooks/useTaskPolling'
@@ -52,7 +54,6 @@ const {
   resultFileName: jobResultFileName,
   resultText: jobResultText,
   ocrSegments: jobOcrSegments,
-  outputFiles: jobOutputFiles,
   resultMetadata: jobResultMetadata,
   start: startPolling,
   stop: stopPolling,
@@ -105,11 +106,8 @@ const isScreenshotTool = computed(() => props.tool.id === 'responsive-screenshot
 const isImageBatchTool = computed(() => props.tool.id === 'image-batch')
 const isKeyframeTool = computed(() => props.tool.id === 'video-keyframe')
 const isHtmlToImageTool = computed(() => props.tool.id === 'html-to-image')
-
-/** 是否需要文件上传 */
-const needsUpload = computed(() =>
-  props.tool.inputType === 'file' || props.tool.inputType === 'file+text'
-)
+const isUrlToPdfTool = computed(() => props.tool.id === 'url-to-pdf')
+const isPerfSnapshotTool = computed(() => props.tool.id === 'perf-snapshot')
 
 /** 转换结果的输出类别（用于选择预览方式：图片/音频/视频） */
 const convertOutputCategory = computed<'image' | 'video' | 'audio' | null>(() => {
@@ -127,6 +125,8 @@ const processingMessage = computed(() => {
   if (isImageBatchTool.value) return '正在批量处理图片，请稍候...'
   if (isKeyframeTool.value) return '正在提取关键帧，请稍候...'
   if (isHtmlToImageTool.value) return '正在渲染截图，请稍候...'
+  if (isUrlToPdfTool.value) return '正在导出 PDF，请稍候...'
+  if (isPerfSnapshotTool.value) return '正在采集性能数据，请稍候...'
   if (isSttTool.value) return '正在识别中，请稍候...'
   return '正在处理中，请稍候...'
 })
@@ -263,7 +263,7 @@ async function createAndPollJob(payload: { toolId: string; uploadId?: string; pa
   currentJobId.value = createResult.data.jobId
 
   const stopWatch = watch([jobStatus, jobResultUrl, jobResultText, jobOcrSegments], ([status, url, text, segments]) => {
-    if (status === 'succeeded' && url) { phase.value = 'done'; showResult.value = true; ocrText.value = text || null; ocrSegments.value = segments || null; stopWatch() }
+    if (status === 'succeeded' && (url || text)) { phase.value = 'done'; showResult.value = true; ocrText.value = text || null; ocrSegments.value = segments || null; stopWatch() }
     else if (status === 'failed') { phase.value = 'error'; stopWatch() }
     else if (status === 'canceled') { phase.value = 'idle'; stopWatch() }
   })
@@ -286,6 +286,33 @@ async function handlePdfSubmit(payload: {
   if (payload.pages) params.pages = payload.pages
   if (payload.quality !== undefined) params.quality = String(payload.quality)
   await createAndPollJob({ toolId: toolId.value, uploadId, params })
+}
+
+/** 网页转 PDF：不走上传，直接 params 传 url + 格式参数 */
+async function handleUrlToPdfSubmit(payload: {
+  url: string; format: string; landscape: boolean; printBackground: boolean
+}) {
+  showResult.value = false; currentJobId.value = null
+  phase.value = 'processing'
+  await createAndPollJob({
+    toolId: toolId.value,
+    params: {
+      url: payload.url,
+      format: payload.format,
+      landscape: payload.landscape ? 'true' : 'false',
+      print_background: payload.printBackground ? 'true' : 'false',
+    },
+  })
+}
+
+/** 性能快照：不走上传，直接 params 传 url */
+async function handlePerfSnapshotSubmit(payload: { url: string }) {
+  showResult.value = false; currentJobId.value = null
+  phase.value = 'processing'
+  await createAndPollJob({
+    toolId: toolId.value,
+    params: { url: payload.url },
+  })
 }
 
 /** 多分辨率截图：不走上传，直接 params 传 url */
@@ -425,8 +452,68 @@ async function copyToClipboard(text: string): Promise<void> {
 
     <NSpace vertical :size="20">
       <!-- ================================================ -->
+      <!-- url-to-pdf：无文件上传，输入 URL → PDF          -->
+      <template v-if="isUrlToPdfTool">
+        <UrlToPdfForm
+          :tool="props.tool"
+          :is-busy="isBusy"
+          @submit="handleUrlToPdfSubmit"
+        />
+
+        <div v-if="isBusy" class="loading-bar">
+          <span class="loading-bar-spinner" />
+          <span class="loading-bar-text">{{ processingMessage }}</span>
+        </div>
+
+        <NAlert v-if="phase === 'error'" type="error" :bordered="false">
+          {{ jobError || '处理失败，请重试' }}
+        </NAlert>
+        <NButton v-if="phase === 'error'" size="small" @click="handleRetry">重试</NButton>
+
+        <ResultDownload
+          v-if="showResult && resultDownloadUrl"
+          :download-url="resultDownloadUrl"
+          :file-name="downloadFileName || 'output.pdf'"
+        />
+      </template>
+
+      <!-- ================================================ -->
+      <!-- perf-snapshot：无文件上传，采集性能数据        -->
+      <template v-else-if="isPerfSnapshotTool">
+        <PerfSnapshotForm
+          :tool="props.tool"
+          :is-busy="isBusy"
+          @submit="handlePerfSnapshotSubmit"
+        />
+
+        <div v-if="isBusy" class="loading-bar">
+          <span class="loading-bar-spinner" />
+          <span class="loading-bar-text">{{ processingMessage }}</span>
+        </div>
+
+        <NAlert v-if="phase === 'error'" type="error" :bordered="false">
+          {{ jobError || '处理失败，请重试' }}
+        </NAlert>
+        <NButton v-if="phase === 'error'" size="small" @click="handleRetry">重试</NButton>
+
+        <!-- 性能报告 -->
+        <div v-if="showResult && isPerfSnapshotTool && jobResultText" class="perf-report-card">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-semibold text-neutral-700">性能报告</span>
+          </div>
+          <pre class="perf-report-text">{{ jobResultText }}</pre>
+        </div>
+
+        <ResultDownload
+          v-if="showResult && resultDownloadUrl"
+          :download-url="resultDownloadUrl"
+          :file-name="downloadFileName || 'perf-report.json'"
+        />
+      </template>
+
+      <!-- ================================================ -->
       <!-- responsive-screenshot：无文件上传，文本输入 URL  -->
-      <template v-if="isScreenshotTool">
+      <template v-else-if="isScreenshotTool">
         <ResponsiveScreenshotForm
           :tool="props.tool"
           :is-busy="isBusy"
@@ -715,7 +802,7 @@ async function copyToClipboard(text: string): Promise<void> {
         <div v-if="showResult && isKeyframeTool && jobResultMetadata?.frame_files" class="result-preview-card">
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm font-semibold text-neutral-700">
-              预览（{{ jobResultMetadata.frame_count }} 帧，{{ jobResultMetadata.duration }}s）
+              预览（{{ (jobResultMetadata as any).frame_count }} 帧，{{ (jobResultMetadata as any).duration }}s）
             </span>
           </div>
           <div class="keyframe-grid">
@@ -733,7 +820,7 @@ async function copyToClipboard(text: string): Promise<void> {
               <span class="keyframe-ts">{{ ff.timestamp }}s</span>
             </div>
           </div>
-          <p v-if="jobResultMetadata.frame_count > 12" class="text-xs text-neutral-400 mt-3">
+          <p v-if="(jobResultMetadata as any).frame_count > 12" class="text-xs text-neutral-400 mt-3">
             仅展示前 12 帧，下载 ZIP 获取全部
           </p>
         </div>
@@ -742,7 +829,7 @@ async function copyToClipboard(text: string): Promise<void> {
         <div v-if="showResult && isImageBatchTool && resultDownloadUrl" class="result-meta-card">
           <p class="rmc-title">处理完成</p>
           <p class="rmc-desc" v-if="jobResultMetadata">
-            {{ jobResultMetadata.total_outputs || jobResultMetadata.files?.length }} 张图片
+            {{ (jobResultMetadata as any).total_outputs || (jobResultMetadata as any).files?.length }} 张图片
           </p>
           <div v-if="jobResultMetadata?.srcset" class="rmc-code">
             <div class="rmc-code-header">
@@ -1162,6 +1249,29 @@ async function copyToClipboard(text: string): Promise<void> {
   word-break: break-all;
   max-height: 200px;
   overflow-y: auto;
+  user-select: text;
+}
+
+/* 性能报告卡片 */
+.perf-report-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.perf-report-text {
+  margin: 0;
+  padding: 16px;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
   user-select: text;
 }
 </style>

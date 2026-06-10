@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVER_DIR="$SCRIPT_DIR/server"
+SERVER_DIR="$SCRIPT_DIR/py-server"
 WEB_DIR="$SCRIPT_DIR/web"
 DESKTOP_DIR="$SCRIPT_DIR/desktop"
 

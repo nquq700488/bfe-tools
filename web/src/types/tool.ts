@@ -104,6 +104,9 @@ export type ClientToolId =
   | 'qrcode-generator'
   | 'svg-editor'
   | 'url-codec'
+  | 'html-css-tool'
+  | 'api-tester'
+  | 'ws-tester'
 
 /** 后端任务工具 ID */
 export type BackendToolId =
@@ -117,6 +120,8 @@ export type BackendToolId =
   | 'image-batch'
   | 'video-keyframe'
   | 'html-to-image'
+  | 'url-to-pdf'
+  | 'perf-snapshot'
 
 // ============================================================
 // 任务/上传状态类型（不变）

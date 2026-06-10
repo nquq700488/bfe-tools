@@ -1,26 +1,23 @@
 <script setup lang="ts">
 /**
- * AppSidebar — 左侧侧边栏（搜索优先 + 分类折叠）
- * - 顶部搜索框：输入即过滤，不匹配的分类整组隐藏
- * - 分类折叠：默认展开有 active 工具的分类和第一个分类
- * - 移动端：搜索框 + 横向滑动图标
+ * AppSidebar — 左侧侧边栏（搜索 + Naive UI NMenu）
+ * - 顶部搜索框：输入即过滤，不匹配的分类/工具整组隐藏
+ * - NMenu 管理折叠/展开/active/键盘导航
+ * - 移动端：横向滑动图标
  */
-import { computed, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { NMenu } from 'naive-ui'
+import type { MenuOption } from 'naive-ui'
 import { toolRegistry } from '@/tools/registry'
-import type { ToolCategory } from '@/types/tool'
+import type { ToolCategory, ToolDefinition } from '@/types/tool'
 
 const router = useRouter()
 const route = useRoute()
 const currentYear = new Date().getFullYear()
 
 // == 分类元数据 ==
-interface CategoryMeta {
-  key: ToolCategory
-  label: string
-}
-
-const CATEGORIES: CategoryMeta[] = [
+const CATEGORIES: { key: ToolCategory; label: string }[] = [
   { key: 'text', label: '文本处理' },
   { key: 'image', label: '图片处理' },
   { key: 'audio', label: '音频处理' },
@@ -33,63 +30,79 @@ const CATEGORIES: CategoryMeta[] = [
 
 // == 搜索 ==
 const searchQuery = ref('')
-const queryLower = computed(() => searchQuery.value.trim().toLowerCase())
+const hasQuery = computed(() => searchQuery.value.trim().length > 0)
 
-/** 按分类分组的工具列表（含搜索过滤） */
-const groupedTools = computed(() => {
-  const all = [...toolRegistry.values()]
-  const query = queryLower.value
+// == 当前激活的工具 ID ==
+const activeKey = computed(() => (route.params.toolId as string) || null)
 
-  return CATEGORIES
-    .map((cat) => {
-      const items = all
-        .filter((t) => t.category === cat.key)
-        .filter((t) => {
-          if (!query) return true
-          return (
-            t.name.toLowerCase().includes(query) ||
-            t.description.toLowerCase().includes(query) ||
-            t.id.includes(query)
-          )
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
-
-      return { ...cat, items }
-    })
-    .filter((g) => g.items.length > 0)
-})
-
-// == 折叠状态（初始展开 active 工具所在分类 + 第一个分类，其余折叠）==
-const collapsed = ref(new Set<string>())
-
-function initCollapsed() {
-  const activeTool = [...toolRegistry.values()].find(
-    (t) => t.id === route.params.toolId,
-  )
-  const expanded = new Set<string>()
-  if (activeTool) expanded.add(activeTool.category)
-  if (CATEGORIES.length > 0) expanded.add(CATEGORIES[0].key)
-  CATEGORIES.forEach((c) => {
-    if (!expanded.has(c.key)) collapsed.value.add(c.key)
-  })
-}
-initCollapsed()
-
-function toggleCategory(key: string) {
-  if (collapsed.value.has(key)) {
-    collapsed.value.delete(key)
-  } else {
-    collapsed.value.add(key)
+// == 将工具转为 NMenu option ==
+function toolOption(tool: ToolDefinition): MenuOption {
+  return {
+    label: () => h('span', { class: 'menu-tool-label' }, [
+      h('span', { class: 'menu-tool-icon' }, tool.icon),
+      h('span', null, tool.name),
+    ]),
+    key: tool.id,
   }
 }
 
-// == 路由 ==
-function handleNavigateToTool(toolId: string) {
-  router.push({ name: 'tool', params: { toolId } })
+// == 无搜索：分组树形结构 ==
+const groupedMenuOptions = computed<MenuOption[]>(() =>
+  CATEGORIES
+    .map((cat) => {
+      const items = [...toolRegistry.values()]
+        .filter((t) => t.category === cat.key)
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+
+      if (items.length === 0) return null
+      return {
+        type: 'submenu' as const,
+        label: `${cat.label} (${items.length})`,
+        key: cat.key,
+        children: items.map(toolOption),
+      }
+    })
+    .filter(Boolean) as MenuOption[],
+)
+
+// == 搜索模式：扁平列表 ==
+const flatMenuOptions = computed<MenuOption[]>(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return []
+
+  return [...toolRegistry.values()]
+    .filter((t) =>
+      t.name.toLowerCase().includes(query) ||
+      t.description.toLowerCase().includes(query) ||
+      t.id.includes(query),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+    .map(toolOption)
+})
+
+const menuOptions = computed<MenuOption[]>(() =>
+  hasQuery.value ? flatMenuOptions.value : groupedMenuOptions.value,
+)
+
+// == 折叠控制（controlled — 支持点击展开/收起） ==
+const expandedKeys = ref<string[]>([])
+const activeTool = [...toolRegistry.values()].find((t) => t.id === activeKey.value)
+if (activeTool) expandedKeys.value.push(activeTool.category)
+if (CATEGORIES.length > 0 && !expandedKeys.value.includes(CATEGORIES[0].key)) {
+  expandedKeys.value.push(CATEGORIES[0].key)
+}
+
+// == 导航 ==
+function handleMenuUpdate(_key: string, item: MenuOption) {
+  router.push({ name: 'tool', params: { toolId: item.key as string } })
 }
 
 function handleGoHome() {
   router.push({ name: 'home' })
+}
+
+function handleExpandedKeysUpdate(keys: string[]) {
+  expandedKeys.value = keys
 }
 </script>
 
@@ -133,50 +146,18 @@ function handleGoHome() {
       </button>
     </div>
 
-    <!-- 分类分组导航 -->
-    <nav aria-label="工具导航" class="sidebar-nav">
-      <template v-for="group in groupedTools" :key="group.key">
-        <div class="nav-group">
-          <!-- 分类标题（可点击折叠） -->
-          <button
-            class="nav-group-header"
-            @click="toggleCategory(group.key)"
-            :aria-expanded="!collapsed.has(group.key)"
-          >
-            <svg
-              class="nav-group-chevron"
-              :class="{ collapsed: collapsed.has(group.key) }"
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-            >
-              <path d="M2 3l3 4 3-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <span class="nav-group-label">{{ group.label }}</span>
-            <span class="nav-group-count">{{ group.items.length }}</span>
-          </button>
-
-          <!-- 工具列表 -->
-          <div v-show="!collapsed.has(group.key)" class="nav-group-items">
-            <button
-              v-for="tool in group.items"
-              :key="tool.id"
-              class="sidebar-nav-item"
-              :class="{ active: route.params.toolId === tool.id }"
-              @click="handleNavigateToTool(tool.id)"
-            >
-              <span class="sidebar-nav-icon">{{ tool.icon }}</span>
-              <span class="sidebar-nav-label">{{ tool.name }}</span>
-            </button>
-          </div>
-        </div>
-      </template>
-
-      <!-- 无匹配结果 -->
-      <div v-if="groupedTools.length === 0" class="nav-empty">
-        <p>未找到匹配的工具</p>
-      </div>
-    </nav>
+    <!-- NMenu 导航 -->
+    <NMenu
+      :options="menuOptions"
+      :value="activeKey"
+      :expanded-keys="expandedKeys"
+      accordion
+      :collapsed-icon-size="12"
+      :expanded-icon-size="12"
+      :indent="12"
+      @update:value="handleMenuUpdate"
+      @update:expanded-keys="handleExpandedKeysUpdate"
+    />
 
     <!-- 底部 -->
     <div class="sidebar-footer">
@@ -200,7 +181,7 @@ function handleGoHome() {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-right: 1px solid var(--color-neutral-100);
   padding: 20px 12px 12px;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 /* === Logo === */
@@ -217,9 +198,7 @@ function handleGoHome() {
   transition: background-color var(--duration-fast);
   flex-shrink: 0;
 }
-.sidebar-logo:hover {
-  background-color: var(--color-neutral-50);
-}
+.sidebar-logo:hover { background-color: var(--color-neutral-50); }
 
 .logo-mark {
   display: flex;
@@ -232,7 +211,6 @@ function handleGoHome() {
   color: #fff;
   flex-shrink: 0;
 }
-
 .logo-text {
   font-size: 14px;
   font-weight: 700;
@@ -243,10 +221,9 @@ function handleGoHome() {
 /* === 搜索框 === */
 .sidebar-search {
   position: relative;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
-
 .search-icon {
   position: absolute;
   left: 10px;
@@ -255,7 +232,6 @@ function handleGoHome() {
   color: var(--color-neutral-400);
   pointer-events: none;
 }
-
 .search-input {
   width: 100%;
   padding: 7px 28px 7px 30px;
@@ -267,16 +243,11 @@ function handleGoHome() {
   outline: none;
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
-
-.search-input::placeholder {
-  color: var(--color-neutral-400);
-}
-
+.search-input::placeholder { color: var(--color-neutral-400); }
 .search-input:focus {
   border-color: var(--color-primary-400);
   box-shadow: 0 0 0 2px var(--color-primary-50);
 }
-
 .search-clear {
   position: absolute;
   right: 6px;
@@ -291,156 +262,31 @@ function handleGoHome() {
   border-radius: 4px;
   line-height: 1;
 }
+.search-clear:hover { color: var(--color-neutral-600); background: var(--color-neutral-100); }
 
-.search-clear:hover {
-  color: var(--color-neutral-600);
-  background: var(--color-neutral-100);
-}
-
-/* === 导航容器 === */
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  flex: 1;
-  overflow-y: auto;
-  border-top: 1px solid var(--color-neutral-100);
-  padding-top: 6px;
-}
-
-/* === 分类组 === */
-.nav-group {
-  margin-bottom: 0;
-}
-
-/* 分类标题 */
-.nav-group-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 8px 6px 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  color: var(--color-neutral-500);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  transition: color var(--duration-fast);
-  user-select: none;
-}
-
-.nav-group-header:hover {
-  color: var(--color-neutral-700);
-}
-
-.nav-group-chevron {
-  flex-shrink: 0;
-  transition: transform var(--duration-fast);
-  color: var(--color-neutral-400);
-}
-
-.nav-group-chevron.collapsed {
-  transform: rotate(-90deg);
-}
-
-.nav-group-label {
-  flex: 1;
-}
-
-.nav-group-count {
-  font-size: 10px;
-  color: var(--color-neutral-300);
-  font-weight: 400;
-}
-
-/* 工具列表 */
-.nav-group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 0 0 4px 4px;
-}
-
-/* === 工具项 === */
-.sidebar-nav-item {
-  position: relative;
+/* === 工具项内容 === */
+:deep(.menu-tool-label) {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-in-out);
-  text-align: left;
-  font-size: inherit;
-  color: inherit;
 }
-
-.sidebar-nav-item:hover {
-  background-color: var(--color-neutral-50);
-}
-
-.sidebar-nav-item:active {
-  background-color: var(--color-neutral-100);
-  transform: scale(0.98);
-}
-
-.sidebar-nav-item.active {
-  background-color: var(--color-primary-50);
-}
-
-.sidebar-nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 16px;
-  border-radius: 0 3px 3px 0;
-  background-color: var(--color-primary-500);
-}
-
-.sidebar-nav-icon {
+:deep(.menu-tool-icon) {
   font-size: 15px;
+  width: 22px;
+  text-align: center;
   flex-shrink: 0;
-  width: 24px;
-  text-align: center;
-  transition: transform var(--duration-fast);
 }
 
-.sidebar-nav-item:hover .sidebar-nav-icon {
-  transform: scale(1.1);
+/* NMenu 填充剩余空间并独立滚动 */
+:deep(.n-menu) {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-.sidebar-nav-label {
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-neutral-700);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color var(--duration-fast);
-}
-
-.sidebar-nav-item.active .sidebar-nav-label {
-  color: var(--color-primary-700);
-  font-weight: var(--font-weight-semibold);
-}
-
-/* 无结果 */
-.nav-empty {
-  padding: 24px 12px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-neutral-300);
+/* 没有分组时去掉 title 上方的 border */
+:deep(.n-menu .n-menu-item-group .n-menu-item-group-title) {
+  border-top: none;
 }
 
 /* === 底部 === */
@@ -449,8 +295,8 @@ function handleGoHome() {
   border-top: 1px solid var(--color-neutral-100);
   text-align: center;
   flex-shrink: 0;
+  margin-top: auto;
 }
-
 .sidebar-copyright {
   font-size: 11px;
   color: var(--color-neutral-300);
@@ -480,61 +326,14 @@ function handleGoHome() {
   .sidebar-logo,
   .sidebar-footer,
   .logo-text,
-  .sidebar-search,
-  .nav-group-header,
-  .nav-group-count,
-  .nav-group-chevron,
-  .sidebar-nav-label,
-  .nav-empty {
+  .sidebar-search {
     display: none;
   }
 
-  .sidebar-nav {
-    flex-direction: row;
-    gap: 6px;
-    flex: none;
-    border-top: none;
-    padding: 0;
-    overflow-x: auto;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .sidebar-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .nav-group {
-    margin: 0;
-  }
-
-  .nav-group-items {
-    display: flex;
-    flex-direction: row;
-    gap: 6px;
-    padding: 0;
-  }
-
-  .sidebar-nav-item {
-    width: auto;
-    padding: 8px 14px;
-    gap: 6px;
-    border-radius: 9999px;
-    white-space: nowrap;
-  }
-
-  .sidebar-nav-item.active::before {
-    bottom: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 24px;
-    height: 3px;
-    border-radius: 3px 3px 0 0;
-    top: auto;
-  }
-
-  .sidebar-nav-item.active {
-    background-color: var(--color-primary-50);
-  }
+  :deep(.n-menu) { flex-direction: row !important; overflow-x: auto; }
+  :deep(.n-menu .n-menu-item-group) { flex-shrink: 0; }
+  :deep(.n-menu .n-menu-item-content) { padding: 6px 14px !important; border-radius: 9999px !important; white-space: nowrap; }
+  :deep(.n-menu .n-menu-item-content__icon) { margin-right: 6px !important; }
+  :deep(.n-menu .n-menu-item-group-title) { display: none; }
 }
 </style>

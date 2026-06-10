@@ -272,6 +272,8 @@ from app.engine.screenshot_engine import ScreenshotEngine as _ScreenshotEngine
 from app.engine.image_batch_engine import ImageBatchEngineImpl as _ImageBatchEngine
 from app.engine.video_keyframe_engine import VideoKeyframeEngineImpl as _KeyframeEngine
 from app.engine.html_to_image_engine import HtmlToImageEngineImpl as _HtmlToImageEngine
+from app.engine.url_to_pdf_engine import UrlToPdfEngine as _UrlToPdfEngine
+from app.engine.perf_snapshot_engine import PerfSnapshotEngine as _PerfSnapshotEngine
 
 engine_registry.register(_OcrEngine())
 engine_registry.register(_TtsEngine())
@@ -283,3 +285,5 @@ engine_registry.register(_ScreenshotEngine())
 engine_registry.register(_ImageBatchEngine())
 engine_registry.register(_KeyframeEngine())
 engine_registry.register(_HtmlToImageEngine())
+engine_registry.register(_UrlToPdfEngine())
+engine_registry.register(_PerfSnapshotEngine())

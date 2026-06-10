@@ -74,6 +74,88 @@ function createMockItem(overrides?: Partial<Item>) {
 
 ---
 
+## TDD 反模式（来自 Superpowers 的 5 条铁律）
+
+TDD 不只是"先写测试再写代码"，还要求测试验证的是**真实行为**而非 mock 行为。
+
+### 反模式 1：测试 Mock 行为
+
+```typescript
+// ❌ 测试 mock 的存在而非组件真实行为
+test('渲染侧边栏', () => {
+  render(<Page />);
+  expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument();
+});
+
+// ✅ 测试真实组件或不使用 mock
+test('渲染侧边栏', () => {
+  render(<Page />);
+  expect(screen.getByRole('navigation')).toBeInTheDocument();
+});
+```
+
+**门禁**：断言 mock 元素前先问——我是在测试真实组件行为还是 mock 的存在？
+
+### 反模式 2：仅为测试添加的方法
+
+```typescript
+// ❌ destroy() 仅在测试中使用，污染生产类
+class Session {
+  async destroy() { /* 仅测试使用 */ }
+}
+
+// ✅ 测试工具函数处理测试清理
+export async function cleanupSession(session: Session) { /* ... */ }
+```
+
+**门禁**：向生产类添加方法前先问——这个方法仅测试使用吗？是 → 放到测试工具文件。
+
+### 反模式 3：不理解依赖就 Mock
+
+```typescript
+// ❌ Mock 了测试所依赖的副作用
+vi.mock('ToolCatalog', () => ({
+  discoverAndCacheTools: vi.fn().mockResolvedValue(undefined) // 破坏了下游逻辑！
+}));
+
+// ✅ Mock 最底层的外部操作，保留中间层行为
+vi.mock('MCPServerManager'); // 只 mock 慢的服务器启动部分
+```
+
+**门禁**：Mock 任何方法前先问——真实方法有哪些副作用？本测试依赖其中哪些？不确定时先用真实实现跑一遍。
+
+### 反模式 4：不完整 Mock
+
+```typescript
+// ❌ 只 mock 了当前测试用到的字段
+const mockResponse = { status: 'success', data: { userId: '123' } };
+// 下游代码访问 response.metadata.requestId → 崩溃
+
+// ✅ Mock 完整的数据结构
+const mockResponse = {
+  status: 'success',
+  data: { userId: '123' },
+  metadata: { requestId: 'req-789', timestamp: Date.now() },
+};
+```
+
+**铁律**：Mock 必须是真实 API 返回的**完整**结构，不是只填测试当前用到的字段。不完整 Mock 会静默失败。
+
+### 反模式 5：集成测试事后补
+
+- ❌ 实现完成 → 无测试 → "可以测试了"
+- ✅ TDD 循环：写失败测试 → 实现 → 重构 → 然后才说完成
+
+**铁律**：测试是实现的一部分，不是可选的后续步骤。
+
+### Mock 复杂度警告
+
+以下信号表明 Mock 过度：Mock 设置比测试逻辑还长、Mock 了所有东西才能跑测试、Mock 缺少真实组件的方法、测试在移除 mock 时失败。
+
+**考虑**：复杂 Mock 时，集成测试通常更简单有效。
+
+---
+
 ## 验收标准规范（按子任务分组）
 
 Planner 输出验收标准、Tester 核查时统一使用以下格式：

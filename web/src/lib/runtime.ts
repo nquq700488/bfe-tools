@@ -165,3 +165,11 @@ export async function initTauriRuntime(): Promise<BackendInfo | null> {
   console.error('[runtime] 后端启动超时')
   return null
 }
+
+/** Bun 服务基地址（读取 Vite 环境变量，修改端口只改 .env 或 .env.example） */
+export const BUN_API_BASE = import.meta.env.VITE_BUN_API_BASE || 'http://localhost:3999'
+
+/** 拼上 Bun 服务基地址 */
+export function resolveBunUrl(path: string): string {
+  return `${BUN_API_BASE}${path}`
+}

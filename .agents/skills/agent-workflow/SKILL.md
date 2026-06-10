@@ -1,61 +1,88 @@
 ---
 name: agent-workflow
 description: >
-  多 Agent 协作工作流薄入口。用于复杂开发、复杂修复、代码审查、测试验证等需要
-  Plan → Dev → Review → Test → Deliver 阶段治理的任务。详细规则以
-  execution-mode-guidelines.md、orchestrator.md、workflow.md、quality-checklist.md 为准。
+  多 Agent 协作工作流薄编排层。用于复杂开发、复杂修复等需要
+  Plan → Dev → Review → Test → Deliver 阶段治理的任务。
+  只负责阶段串联和角色调度，各阶段的执行细节委托给独立 skill。
 ---
 
 # 多 Agent 协作工作流
 
-> 本 skill 只负责启动本地多 Agent 工作流，不重复维护模式判断、阶段门禁、角色职责或质量清单正文。
+> 本 skill 是**编排层**——负责阶段串联和角色调度。
+> 设计：`solution-brainstorm` · 编码：`test-driven-development`
+> 审查：`code-review` · 反馈：`receiving-code-review` · 调试：`systematic-debug`
 
 ## 必读规范
-
-按顺序读取：
 
 1. `AGENTS.md`
 2. `.agents/task-routing.md`
 3. `.agents/execution-mode-guidelines.md`
 4. `.agents/orchestrator.md`
-5. `.agents/workflow.md`
-6. `.agents/quality-checklist.md`
-7. `.agents/agent-registry.md`
+5. `.agents/agent-registry.md`
 
-按任务补读对应领域规范；需要 CCB 多模型增强时改读 `.agents/collaboration.md` 并切到 `multi-agent-orchestrate`。
+按阶段补读：开发 → `workflow.md` + `coding-standards.md`；审查 → `quality-checklist.md`；测试 → `testing-guidelines.md`。需要 CCB 时切到 `multi-agent-orchestrate`。
 
 ## 使用边界
 
-使用本 skill：
+✅ 使用：完整模式任务、多 Agent 协作、Plan→Dev→Review→Test→Deliver 阶段治理
+❌ 不使用：纯咨询、轻量修改、单次审查（用 `code-review`）、单次调试（用 `systematic-debug`）、外部模型协作（用 `multi-agent-orchestrate`）
 
-- 用户明确要求完整模式、多 Agent 协作、代码审查或测试验证
-- 开发任务按 `execution-mode-guidelines.md` 命中完整模式
-- 任务需要方案、开发、审查、测试、交付多个阶段治理
+---
 
-不使用本 skill：
+## 五阶段编排
 
-- 纯咨询、代码解释、方案讨论但不落地
-- 单文件轻改、低风险 bugfix，且满足轻量模式
-- 用户明确要求多模型 / CCB 外部 agent 协作，此时使用 `multi-agent-orchestrate` 或 `ccb-bridge`
+| Phase | 角色 | 委托 Skill | 产出 |
+|-------|------|-----------|------|
+| **P0** 头脑风暴 | Orchestrator | `solution-brainstorm`（完整模式执行模式 A；用户要求多模型时执行模式 B） | 设计确认 + Spec 文档 |
+| **P1** 规划 | Planner | — | 方案、子任务、验收标准、影响面 |
+| **P2** 开发 | Developer | `test-driven-development` | 改动文件、lint/typecheck 结果 |
+| **P3** 审查 | Reviewer | `code-review`（两阶段：spec→quality） | 审查结论 |
+| **P4** 测试 | Tester | `testing-guidelines.md` 门禁 | 测试报告 |
+| **P5** 交付 | Orchestrator | 按需 `commit-helper` → `memory-update` | 交付说明 + 按需提交 + 记忆落盘 |
 
-## 执行骨架
+---
 
-1. 按 `orchestrator.md` 完成入口检查、必要澄清和阶段推进。
-2. 按 `execution-mode-guidelines.md` 判断轻量 / 完整模式，并等待必要确认。
-3. 完整模式按 Orchestrator Phase 推进：Planner -> Developer -> Reviewer -> Tester -> Deliver。
-4. 开发前必须完成正式并行执行分析；未经确认不得进入编码。
-5. 派发任何本地角色前，按 `agent-registry.md` 的「动态角色规范解析」注入本次执行角色的规范和门禁。
-6. 审查阶段可并行派发 Reviewer 和 Inspiration；Reviewer 是正式质量门禁，Inspiration 提供补充审查、反例和遗漏方向。
-7. 测试阶段可并行派发 Tester 和 Inspiration；Tester 是正式验证门禁，Inspiration 提供补充测试视角、边界场景和遗漏风险。
-8. 若当前工具不支持真实子 Agent，由主 Agent 按对应角色清单自检执行，并明确标注“本地角色自检”。
+## 编排规则
+
+### 派发协议
+
+每次派发本地角色按 `agent-registry.md`「本地 Agent 派发协议」注入：
+- 角色身份 + 输入上下文（方案全文、相关文件路径）
+- 必读规范索引 + 必须门禁
+- 产出格式 + 阻断条件
+- **禁止递归编排**
+
+### 子 Agent 上下文隔离
+
+不传递会话历史，只传精确构建的输入。不让子 Agent 自行读取方案文件推导意图。
+
+### 连续执行
+
+已确认方案不暂停。只在 BLOCKED、不可解决的模糊点或全部完成时才中断。进度用一句话 + emoji 同步。
+
+### 并行派发
+
+- Planner 标注的可并行子任务 → 同时派发多个 Developer
+- 审查阶段：Reviewer（正式门禁）+ Inspiration（补充视角）可并行；Inspiration 不替代正式结论
+- 测试阶段：Tester（正式门禁）+ Inspiration（补充视角）可并行
+
+### 实施者四态
+
+| 状态 | 处理 |
+|------|------|
+| `DONE` | 进入下一阶段 |
+| `DONE_WITH_CONCERNS` | 涉及正确性→解决后继续；仅备注→记录后继续 |
+| `NEEDS_CONTEXT` | 补充上下文重新派发 |
+| `BLOCKED` | 缺上下文补、需更强推理换模型、任务太大拆、方案有误上报 |
+
+---
 
 ## 必守红线
 
-- 不跳过模式判断、方案确认、并行分析、Reviewer / Tester 失败处理。
-- 子 Agent 不得递归启动 `agent-workflow` / `multi-agent-orchestrate`，也不得把角色内自检冒充独立阶段。
-- 派发给本地角色的 `【角色规范】` 必须包含该角色规范索引 / 路径和必须门禁；不得只写占位。
-- Inspiration 可参与审查但不能替代 Reviewer 的正式放行结论；其 HIGH / CRITICAL 发现必须汇总给 Reviewer 或路由 Developer 修复。
-- Inspiration 可参与测试但不能替代 Tester 的正式验证结论；其 HIGH / CRITICAL 发现必须汇总给 Tester 或路由 Developer 修复。
-- 已执行 CCB 多模型 Phase 0 时，不再执行本地多角色 Phase 0；降级到本地时，只由最外层 Orchestrator 执行一次本地 Phase 0。
-- 不把 CCB 多模型调用规则写进本 skill；详细规则只维护在 `collaboration.md`。
-- 不跳过 lint、typecheck、必要测试或使用 `--no-verify` 绕过检查。
+- 不跳过模式判断、方案确认、并行分析。
+- 子 Agent 不得递归启动 `agent-workflow` / `multi-agent-orchestrate`。
+- 审查委托给 `code-review`：两阶段顺序强制，不可颠倒。
+- 反馈委托给 `receiving-code-review`：禁止表演性认同。
+- 不信任子 Agent 汇报：用 git diff/Read 复核真实变更。
+- 已执行 CCB Phase 0 时不再执行本地 Phase 0。
+- 不跳过 lint、typecheck、必要测试，禁止 `--no-verify`。

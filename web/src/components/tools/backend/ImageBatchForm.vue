@@ -130,7 +130,7 @@ function handleSubmit() {
       <div class="ibf-section">
         <p class="ibf-section-label">目标宽度（多倍图）</p>
         <div class="ibf-width-grid">
-          <div v-for="(w, idx) in widths" :key="idx" class="ibf-width-chip">
+          <div v-for="(_w, idx) in widths" :key="idx" class="ibf-width-chip">
             <NInputNumber v-model:value="widths[idx]" :min="1" :max="10000"
               :disabled="isBusy" size="small" class="ibf-width-input" />
             <span class="ibf-width-unit">px</span>

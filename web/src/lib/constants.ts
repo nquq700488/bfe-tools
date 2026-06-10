@@ -94,6 +94,14 @@ export const ALLOWED_FILE_TYPES: Record<
     extensions: [],
     mimeTypes: [],
   },
+  'url-to-pdf': {
+    extensions: [],
+    mimeTypes: [],
+  },
+  'perf-snapshot': {
+    extensions: [],
+    mimeTypes: [],
+  },
 }
 
 /**
@@ -110,6 +118,8 @@ export const MAX_FILE_SIZES: Record<BackendToolId, number> = {
   'image-batch': 500 * 1024 * 1024,        // 500MB（zip 包）
   'video-keyframe': 2 * 1024 * 1024 * 1024, // 2GB
   'html-to-image': 0,                       // 无文件上传
+  'url-to-pdf': 0,                           // 无文件上传
+  'perf-snapshot': 0,                        // 无文件上传
 }
 
 /**
@@ -127,6 +137,9 @@ export const CLIENT_TOOL_MAX_INPUT_SIZES: Record<ClientToolId, number> = {
   'qrcode-generator': 0,
   'svg-editor': 2 * 1024 * 1024,         // 2MB
   'url-codec': 1 * 1024 * 1024,          // 1MB
+  'html-css-tool': 0,                     // 无文件上传
+  'api-tester': 0,                        // 无文件上传
+  'ws-tester': 0,                         // 无文件上传
 }
 
 /** 默认上传大小上限 */

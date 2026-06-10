@@ -35,6 +35,8 @@ export function useTaskPolling() {
         error: string | null
         resultText?: string | null
         ocrSegments?: OcrSegment[] | null
+        outputFiles?: OutputFile[] | null
+        resultMetadata?: Record<string, unknown> | null
       }>(`/api/v1/jobs/${jobId}`)
     )
 

@@ -6,9 +6,9 @@
   "description": "前端实用工具集合站",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc -b --noEmit",
+    "typecheck": "vue-tsc --noEmit",
     "lint": "eslint . --ext .vue,.ts,.tsx --fix",
     "test": "vitest run",
     "test:watch": "vitest"

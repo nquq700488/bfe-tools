@@ -12,6 +12,7 @@ src/**/*.js
 
 # 依赖
 node_modules/
+bun.lockb
 
 # Editor / IDE
 .idea/

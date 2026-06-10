@@ -7,7 +7,7 @@ import { ref } from 'vue'
 import { NInput, NSelect, NSwitch } from 'naive-ui'
 import type { BackendJobToolDefinition } from '@/types/tool'
 
-const props = defineProps<{
+defineProps<{
   tool: BackendJobToolDefinition
   isBusy: boolean
 }>()
