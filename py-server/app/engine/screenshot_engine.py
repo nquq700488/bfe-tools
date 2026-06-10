@@ -97,7 +97,13 @@ class ScreenshotEngine(ResponsiveScreenshotEngine):
         except ValueError as e:
             return EngineResult(success=False, error=str(e))
         except RuntimeError as e:
-            return EngineResult(success=False, error=str(e))
+            msg = str(e)
+            if "繁忙" in msg or "导航失败" in msg:
+                return EngineResult(
+                    success=False,
+                    error=f"{msg}。建议：减少分辨率数量（如只截 1920/768 两个尺寸）、检查目标网站是否可访问，或稍后重试",
+                )
+            return EngineResult(success=False, error=msg)
         except Exception as e:
             logger.exception("多分辨率截图失败")
             return EngineResult(success=False, error=f"截图失败: {e}")

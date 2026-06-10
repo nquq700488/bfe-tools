@@ -13,6 +13,8 @@ Playwright 浏览器管理器 — 单例 Browser、独立 Context/Page、并发�
 import asyncio
 import ipaddress
 import logging
+import time
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 from app.core.config import settings
@@ -42,6 +44,13 @@ _BLOCKED_NETWORKS = [
     ipaddress.IPv6Network("::1/128"),           # IPv6 loopback
     ipaddress.IPv6Network("fe80::/10"),         # IPv6 link-local
     ipaddress.IPv6Network("fc00::/7"),          # IPv6 unique local
+]
+
+# 导航分层降级策略：依次尝试，超时后降级到下一级
+_NAVIGATION_STRATEGIES = [
+    ("networkidle", 15000),       # 最严格：等网络空闲
+    ("load", 10000),              # 降级：等 load 事件
+    ("domcontentloaded", 8000),   # 最终降级：等 DOM 解析完毕
 ]
 
 
@@ -140,6 +149,53 @@ class BrowserManager:
         """playwright 是否已安装"""
         return PLAYWRIGHT_AVAILABLE
 
+    @asynccontextmanager
+    async def _semaphore_guard(self):
+        """带超时的信号量获取 — 超时后抛出明确错误"""
+        try:
+            await asyncio.wait_for(
+                self._semaphore.acquire(),
+                timeout=settings.PLAYWRIGHT_QUEUE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"服务器繁忙，请稍后重试（当前 {settings.PLAYWRIGHT_CONCURRENCY} 个并发任务已满）"
+            )
+        try:
+            yield
+        finally:
+            self._semaphore.release()
+
+    async def _navigate_with_fallback(self, page, url: str) -> None:
+        """
+        分层降级导航：依次尝试 networkidle → load → domcontentloaded
+
+        每次降级都会记录 warning 日志，便于排查慢页面。
+        导航完成后等待渲染留白时间。
+        """
+        last_error = None
+        for wait_until, timeout_ms in _NAVIGATION_STRATEGIES:
+            try:
+                await page.goto(
+                    url,
+                    wait_until=wait_until,
+                    timeout=timeout_ms,
+                )
+                logger.debug(f"页面导航成功 (wait_until={wait_until}): {url}")
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"导航降级 (wait_until={wait_until}, timeout={timeout_ms}ms): {url} — {e}"
+                )
+        else:
+            raise RuntimeError(
+                f"页面导航失败（已尝试所有策略）: {url}，最后错误: {last_error}"
+            )
+
+        # 导航成功后留白渲染时间
+        await page.wait_for_timeout(settings.PLAYWRIGHT_RENDER_GRACE_MS)
+
     async def start(self) -> None:
         """
         启动浏览器实例
@@ -205,7 +261,7 @@ class BrowserManager:
             截图的 bytes 数据
 
         Raises:
-            RuntimeError: playwright 未安装或浏览器未启动
+            RuntimeError: playwright 未安装、浏览器未启动、操作超时或服务器繁忙
             ValueError: URL 不安全
         """
         if not self._started or not self._browser:
@@ -214,35 +270,43 @@ class BrowserManager:
         if not is_url_safe(url):
             raise ValueError(f"URL 安全校验失败: {url}")
 
-        async with self._semaphore:
-            context = await self._browser.new_context(
-                viewport={"width": width, "height": height},
+        async with self._semaphore_guard():
+            return await asyncio.wait_for(
+                self._screenshot_impl(url, width, height, full_page, output_format),
+                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
             )
-            try:
-                page = await context.new_page()
 
-                # 限制页面高度
-                if full_page:
-                    await page.add_init_script("""
-                        document.documentElement.style.maxHeight = '20000px';
-                    """)
+    async def _screenshot_impl(
+        self,
+        url: str,
+        width: int,
+        height: int,
+        full_page: bool,
+        output_format: str,
+    ) -> bytes:
+        """screenshot 的实际实现（被 _semaphore_guard + asyncio.wait_for 包裹）"""
+        context = await self._browser.new_context(
+            viewport={"width": width, "height": height},
+        )
+        try:
+            page = await context.new_page()
 
-                await page.goto(
-                    url,
-                    wait_until="commit",
-                    timeout=settings.PLAYWRIGHT_NAVIGATION_TIMEOUT * 1000,
+            # 限制页面高度
+            if full_page:
+                await page.add_init_script(
+                    f"document.documentElement.style.maxHeight = '{settings.PLAYWRIGHT_MAX_PAGE_HEIGHT}px';"
                 )
-                # 等待页面内容渲染（图片、lazy-load）
-                await page.wait_for_timeout(3000)
 
-                screenshot_bytes = await page.screenshot(
-                    full_page=full_page,
-                    type=output_format,  # type: ignore[arg-type] — runtime validated
-                )
-                logger.info(f"截图完成: {url} ({width}x{height}, {len(screenshot_bytes)} bytes)")
-                return screenshot_bytes
-            finally:
-                await context.close()
+            await self._navigate_with_fallback(page, url)
+
+            screenshot_bytes = await page.screenshot(
+                full_page=full_page,
+                type=output_format,  # type: ignore[arg-type] — runtime validated
+            )
+            logger.info(f"截图完成: {url} ({width}x{height}, {len(screenshot_bytes)} bytes)")
+            return screenshot_bytes
+        finally:
+            await context.close()
 
     async def render_html(
         self,
@@ -266,22 +330,36 @@ class BrowserManager:
             渲染结果的 bytes 数据
 
         Raises:
-            RuntimeError: playwright 未安装或浏览器未启动
+            RuntimeError: playwright 未安装、浏览器未启动、操作超时或服务器繁忙
         """
         if not self._started or not self._browser:
             raise RuntimeError("BrowserManager 未启动，请先调用 start()")
 
-        async with self._semaphore:
-            context = await self._browser.new_context(
-                viewport={"width": width, "height": 600},
+        async with self._semaphore_guard():
+            return await asyncio.wait_for(
+                self._render_html_impl(html, css, width, full_page, output_format),
+                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
             )
-            try:
-                page = await context.new_page()
 
-                # 请求拦截（HTML 渲染不加载外部资源）
-                await page.route("**/*", _block_dangerous_requests)
+    async def _render_html_impl(
+        self,
+        html: str,
+        css: str,
+        width: int,
+        full_page: bool,
+        output_format: str,
+    ) -> bytes:
+        """render_html 的实际实现"""
+        context = await self._browser.new_context(
+            viewport={"width": width, "height": 600},
+        )
+        try:
+            page = await context.new_page()
 
-                html_content = f"""<!DOCTYPE html>
+            # 请求拦截（HTML 渲染不加载外部资源）
+            await page.route("**/*", _block_dangerous_requests)
+
+            html_content = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -296,22 +374,22 @@ class BrowserManager:
 </body>
 </html>"""
 
-                await page.set_content(
-                    html_content,
-                    timeout=settings.PLAYWRIGHT_NAVIGATION_TIMEOUT * 1000,
-                )
+            await page.set_content(
+                html_content,
+                timeout=settings.PLAYWRIGHT_NAVIGATION_TIMEOUT * 1000,
+            )
 
-                # 等待字体和图片加载
-                await page.wait_for_load_state("networkidle")
+            # 等待字体和图片加载
+            await page.wait_for_load_state("networkidle")
 
-                screenshot_bytes = await page.screenshot(
-                    full_page=full_page,
-                    type=output_format,  # type: ignore[arg-type] — runtime validated
-                )
-                logger.info(f"HTML 渲染完成: {len(html)} chars → {len(screenshot_bytes)} bytes")
-                return screenshot_bytes
-            finally:
-                await context.close()
+            screenshot_bytes = await page.screenshot(
+                full_page=full_page,
+                type=output_format,  # type: ignore[arg-type] — runtime validated
+            )
+            logger.info(f"HTML 渲染完成: {len(html)} chars → {len(screenshot_bytes)} bytes")
+            return screenshot_bytes
+        finally:
+            await context.close()
 
     async def to_pdf(
         self,
@@ -338,28 +416,36 @@ class BrowserManager:
         if not is_url_safe(url):
             raise ValueError(f"URL 安全校验失败: {url}")
 
-        async with self._semaphore:
-            context = await self._browser.new_context()
-            try:
-                page = await context.new_page()
+        async with self._semaphore_guard():
+            return await asyncio.wait_for(
+                self._to_pdf_impl(url, output_format, landscape, print_background),
+                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
+            )
 
-                await page.goto(
-                    url,
-                    wait_until="commit",
-                    timeout=settings.PLAYWRIGHT_NAVIGATION_TIMEOUT * 1000,
-                )
-                await page.wait_for_timeout(3000)
+    async def _to_pdf_impl(
+        self,
+        url: str,
+        output_format: str,
+        landscape: bool,
+        print_background: bool,
+    ) -> bytes:
+        """to_pdf 的实际实现"""
+        context = await self._browser.new_context()
+        try:
+            page = await context.new_page()
 
-                pdf_bytes = await page.pdf(
-                    format=output_format,
-                    landscape=landscape,
-                    print_background=print_background,
-                    margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"},
-                )
-                logger.info(f"PDF 生成完成: {url} → {len(pdf_bytes)} bytes")
-                return pdf_bytes
-            finally:
-                await context.close()
+            await self._navigate_with_fallback(page, url)
+
+            pdf_bytes = await page.pdf(
+                format=output_format,
+                landscape=landscape,
+                print_background=print_background,
+                margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"},
+            )
+            logger.info(f"PDF 生成完成: {url} → {len(pdf_bytes)} bytes")
+            return pdf_bytes
+        finally:
+            await context.close()
 
     async def perf_snapshot(
         self,
@@ -373,6 +459,10 @@ class BrowserManager:
 
         Returns:
             dict — 性能指标
+
+        Raises:
+            RuntimeError: playwright 未安装、浏览器未启动、操作超时或服务器繁忙
+            ValueError: URL 不安全
         """
         if not self._started or not self._browser:
             raise RuntimeError("BrowserManager 未启动，请先调用 start()")
@@ -380,105 +470,138 @@ class BrowserManager:
         if not is_url_safe(url):
             raise ValueError(f"URL 安全校验失败: {url}")
 
-        async with self._semaphore:
-            context = await self._browser.new_context(
-                viewport={"width": 1920, "height": 1080},
+        async with self._semaphore_guard():
+            return await asyncio.wait_for(
+                self._perf_snapshot_impl(url),
+                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT + 15,
             )
-            try:
-                page = await context.new_page()
 
-                # 导航（commit 只等首字节响应，避免大站超时）
-                start_ns = __import__("time").time_ns()
-                try:
-                    response = await page.goto(
-                        url,
-                        wait_until="commit",
-                        timeout=settings.PLAYWRIGHT_NAVIGATION_TIMEOUT * 1000,
-                    )
-                except Exception:
-                    # commit 失败时降级为不等待
-                    response = await page.goto(
-                        url,
-                        wait_until="commit",
-                        timeout=60000,
-                    )
-                # 等 8 秒让 FCP/LCP/资源加载完成
-                await page.wait_for_timeout(8000)
-                nav_end_ns = __import__("time").time_ns()
+    async def _perf_snapshot_impl(self, url: str) -> dict:
+        """perf_snapshot 的实际实现"""
+        context = await self._browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+        )
+        try:
+            # 导航：分层降级 + page 级别重试
+            page = await context.new_page()
+            start_ns = time.time_ns()
+            response, page = await self._navigate_perf_with_retry(page, url)
+            nav_end_ns = time.time_ns()
 
-                # 提取 Navigation Timing API
-                timing = await page.evaluate("""() => {
-                    const t = performance.getEntriesByType('navigation')[0];
-                    if (!t) return null;
-                    return {
-                        domContentLoaded: Math.round(t.domContentLoadedEventEnd),
-                        loadComplete: Math.round(t.loadEventEnd),
-                        firstByte: Math.round(t.responseStart),
-                        domInteractive: Math.round(t.domInteractive),
-                        dnsLookup: Math.round(t.domainLookupEnd - t.domainLookupStart),
-                        tcpConnect: Math.round(t.connectEnd - t.connectStart),
-                        ttfb: Math.round(t.responseStart - t.requestStart),
-                        fcp: null,
-                        lcp: null,
-                        cls: null,
-                        transferSize: t.transferSize,
-                        encodedBodySize: t.encodedBodySize,
-                        decodedBodySize: t.decodedBodySize,
-                    };
-                }""")
+            # 额外等待让性能数据稳定（FCP/LCP/资源加载）
+            await page.wait_for_timeout(
+                max(settings.PLAYWRIGHT_RENDER_GRACE_MS * 3, 6000)
+            )
 
-                # 尝试采集 Paint Timing (FCP)
-                try:
-                    fcp_data = await page.evaluate("""() => {
-                        const entries = performance.getEntriesByType('paint');
-                        const fcp = entries.find(e => e.name === 'first-contentful-paint');
-                        return fcp ? Math.round(fcp.startTime) : null;
-                    }""")
-                except Exception:
-                    fcp_data = None
-
-                # 采集 LCP（使用 buffered observer，已等 5s 足够）
-                try:
-                    lcp_data = await page.evaluate("""() => {
-                        const entries = performance.getEntriesByType('largest-contentful-paint');
-                        return entries.length > 0 ? Math.round(entries[entries.length - 1].startTime) : null;
-                    }""")
-                except Exception:
-                    lcp_data = None
-
-                # 采集资源统计
-                resources = await page.evaluate("""() => {
-                    const entries = performance.getEntriesByType('resource');
-                    const byType = {};
-                    let totalSize = 0;
-                    let totalCount = entries.length;
-                    entries.forEach(e => {
-                        const type = e.initiatorType || 'other';
-                        if (!byType[type]) byType[type] = { count: 0, size: 0, totalDuration: 0 };
-                        byType[type].count++;
-                        byType[type].size += e.transferSize || 0;
-                        byType[type].totalDuration += e.duration || 0;
-                        totalSize += e.transferSize || 0;
-                    });
-                    return { byType, totalSize, totalCount };
-                }""")
-
-                status_code = response.status if response else 0
-                nav_time_ms = round((nav_end_ns - start_ns) / 1_000_000)
-
-                logger.info(f"性能采集完成: {url} ({nav_time_ms}ms, {status_code})")
-
+            # 提取 Navigation Timing API
+            timing = await page.evaluate("""() => {
+                const t = performance.getEntriesByType('navigation')[0];
+                if (!t) return null;
                 return {
-                    "url": url,
-                    "status_code": status_code,
-                    "nav_time_ms": nav_time_ms,
-                    "timing": timing,
-                    "fcp_ms": fcp_data,
-                    "lcp_ms": lcp_data,
-                    "resources": resources,
-                }
-            finally:
-                await context.close()
+                    domContentLoaded: Math.round(t.domContentLoadedEventEnd),
+                    loadComplete: Math.round(t.loadEventEnd),
+                    firstByte: Math.round(t.responseStart),
+                    domInteractive: Math.round(t.domInteractive),
+                    dnsLookup: Math.round(t.domainLookupEnd - t.domainLookupStart),
+                    tcpConnect: Math.round(t.connectEnd - t.connectStart),
+                    ttfb: Math.round(t.responseStart - t.requestStart),
+                    fcp: null,
+                    lcp: null,
+                    cls: null,
+                    transferSize: t.transferSize,
+                    encodedBodySize: t.encodedBodySize,
+                    decodedBodySize: t.decodedBodySize,
+                };
+            }""")
+
+            # 采集 FCP
+            try:
+                fcp_data = await page.evaluate("""() => {
+                    const entries = performance.getEntriesByType('paint');
+                    const fcp = entries.find(e => e.name === 'first-contentful-paint');
+                    return fcp ? Math.round(fcp.startTime) : null;
+                }""")
+            except Exception:
+                fcp_data = None
+
+            # 采集 LCP
+            try:
+                lcp_data = await page.evaluate("""() => {
+                    const entries = performance.getEntriesByType('largest-contentful-paint');
+                    return entries.length > 0 ? Math.round(entries[entries.length - 1].startTime) : null;
+                }""")
+            except Exception:
+                lcp_data = None
+
+            # 采集资源统计
+            resources = await page.evaluate("""() => {
+                const entries = performance.getEntriesByType('resource');
+                const byType = {};
+                let totalSize = 0;
+                let totalCount = entries.length;
+                entries.forEach(e => {
+                    const type = e.initiatorType || 'other';
+                    if (!byType[type]) byType[type] = { count: 0, size: 0, totalDuration: 0 };
+                    byType[type].count++;
+                    byType[type].size += e.transferSize || 0;
+                    byType[type].totalDuration += e.duration || 0;
+                    totalSize += e.transferSize || 0;
+                });
+                return { byType, totalSize, totalCount };
+            }""")
+
+            status_code = response.status if response else 0
+            nav_time_ms = round((nav_end_ns - start_ns) / 1_000_000)
+
+            logger.info(f"性能采集完成: {url} (导航 {nav_time_ms}ms, HTTP {status_code})")
+
+            return {
+                "url": url,
+                "status_code": status_code,
+                "nav_time_ms": nav_time_ms,
+                "timing": timing,
+                "fcp_ms": fcp_data,
+                "lcp_ms": lcp_data,
+                "resources": resources,
+            }
+        finally:
+            await context.close()
+
+    async def _navigate_perf_with_retry(self, page, url: str):
+        """
+        性能采集专用导航：分层降级 + 失败时创建新 page 重试
+
+        返回 (response, page) — page 可能是重试时创建的新 page。
+        注意：在同一个 BrowserContext 下重试，避免 performance buffer 丢失。
+        """
+        last_error = None
+        for attempt in range(2):
+            for wait_until, timeout_ms in _NAVIGATION_STRATEGIES:
+                try:
+                    response = await page.goto(
+                        url,
+                        wait_until=wait_until,
+                        timeout=timeout_ms,
+                    )
+                    logger.debug(
+                        f"性能采集导航成功 (wait_until={wait_until}, attempt={attempt + 1}): {url}"
+                    )
+                    return response, page
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"性能采集导航降级 (wait_until={wait_until}, timeout={timeout_ms}ms, "
+                        f"attempt={attempt + 1}): {url} — {e}"
+                    )
+            # 所有策略失败，尝试创建新 page 重试（仅第 1 次失败后）
+            if attempt == 0:
+                logger.warning(f"性能采集导航全部策略失败，创建新 page 重试: {url}")
+                await page.close()
+                page = await page.context.new_page()
+
+        raise RuntimeError(
+            f"性能采集导航失败（已尝试所有策略 + 新 page 重试）: {url}，最后错误: {last_error}"
+        )
 
 
 # 全局单例

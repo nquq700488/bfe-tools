@@ -112,8 +112,17 @@ class Settings(BaseSettings):
     PLAYWRIGHT_CONCURRENCY: int = 2
     """Playwright 最大并发截图任务数"""
 
-    PLAYWRIGHT_NAVIGATION_TIMEOUT: int = 30
-    """Playwright 页面导航超时（秒）"""
+    PLAYWRIGHT_NAVIGATION_TIMEOUT: int = 15
+    """Playwright 页面导航超时（秒）。分层降级：networkidle(15s) → load(10s) → domcontentloaded(8s)"""
+
+    PLAYWRIGHT_OPERATION_TIMEOUT: int = 45
+    """Playwright 单次操作总超时（秒），包含导航 + 渲染留白 + 截图/PDF 生成"""
+
+    PLAYWRIGHT_QUEUE_TIMEOUT: int = 60
+    """Playwright 信号量排队等待超时（秒），超时后返回"服务器繁忙"错误"""
+
+    PLAYWRIGHT_RENDER_GRACE_MS: int = 2000
+    """Playwright 导航成功后渲染留白时间（ms），替代硬编码的 3000/8000ms"""
 
     PLAYWRIGHT_MAX_PAGE_HEIGHT: int = 20000
     """Playwright 截图最大页面高度（px）"""
