@@ -13,6 +13,25 @@ description: >
 
 ---
 
+## 执行卡片
+
+必须：
+- 读取 `AGENTS.md`、测试规范、编码规范
+- 先写或定位失败测试
+- 看到测试失败后再写最小实现
+- 每个子任务完成后运行相关验证
+
+禁止：
+- 没有失败测试就写生产代码
+- 删除或回退用户已有改动
+- 用未运行的测试结果声称通过
+
+输出：
+- 报告 RED、GREEN、REFACTOR 各阶段证据
+- 交付时输出验证命令和结果
+
+---
+
 ## 铁律
 
 ```text
@@ -40,7 +59,7 @@ description: >
 
 1. `AGENTS.md`
 2. `.agents/testing-guidelines.md`
-3. `.agents/coding-standards.md`
+3. `.agents/coding-standards/common.md`
 
 ---
 

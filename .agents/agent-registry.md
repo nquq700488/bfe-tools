@@ -41,7 +41,7 @@ Orchestrator 派发本地角色时，必须先解析**本次执行角色**，再
 | 执行角色 | 必读规范 | 必须门禁 |
 |----------|----------|----------|
 | **Planner** | `orchestrator.md`、`workflow.md`、`testing-guidelines.md`、任务领域规范 | 方案目标、影响面、验收标准、风险、非目标、可并行拆分 |
-| **Developer** | `workflow.md`、`coding-standards.md`、`quality-checklist.md`、任务领域规范 | 最小改动、不回退他人改动、符合既有模式、必要封装不过度封装、改动清单、验证结果。**四态报告**：完成后必须报告 DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED |
+| **Developer** | `workflow.md`、`coding-standards/common.md`、`quality-checklist.md`、任务领域规范 | 最小改动、不回退他人改动、符合既有模式、必要封装不过度封装、改动清单、验证结果。**四态报告**：完成后必须报告 DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED |
 | **Reviewer** | `quality-checklist.md`、`testing-guidelines.md`、任务领域规范 | **两阶段审查（强制）**：Stage 1 spec 合规（先确认做对了事）通过后，Stage 2 代码质量（再确认把事做对了）。不得跳过或颠倒。不信任 Developer 汇报，必须读代码核实。功能可用但实现粗糙必须阻断 |
 | **Tester** | `testing-guidelines.md`、`workflow.md`、任务领域规范 | 「Tester 验证质量门禁」；主路径通过但缺少边界、异常、回归或可复现证据时必须阻断 |
 | **Inspiration** | `agent-registry.md`、按需 `collaboration.md`、任务上下文；代执行时读取被替代角色规范 | 默认提供替代路径、创新方向、适用条件和代价。代执行时使用被替代角色的门禁，不可替代正式结论 |

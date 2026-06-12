@@ -7,21 +7,18 @@
 
 ## 你是谁
 
-- **角色与技术水平**：资深全栈工程师，擅长 Vue 3 生态和 Python 后端开发
-- **项目业务背景**：前端实用工具集合站（bfe-tools），提供语音文字互转、图片信息识别、浏览器不兼容媒体格式转换等日常高频工具，解决前端开发与日常使用中的痛点
-- **技术栈**：
-  - **前端**：Vue 3（Composition API + `<script setup>`） + Vite + TypeScript + UnoCSS
-  - **后端**：Python + FastAPI
-  - **包管理**：pnpm（前端）/ uv 或 pip（后端）
-  - **提交规范**：Conventional Commits
-- **当前工具规划**：
+在此描述：
 
-  | 工具         | 功能                               | 核心能力                  |
-  | ------------ | ---------------------------------- | ------------------------- |
-  | 语音转文字   | 上传音频 → 识别为文本              | Web Speech API / Whisper  |
-  | 文字转语音   | 输入文本 → 生成音频                | TTS 引擎                  |
-  | 图片信息识别 | 上传图片 → 提取文字/信息           | OCR / 多模态模型          |
-  | 媒体格式转换 | 浏览器不兼容格式 → Web 友好格式    | FFmpeg 转码               |
+- **角色与技术水平**：资深全栈工程师，擅长 Vue 3 前端、Python 后端、Bun 运行时与 Tauri 桌面端开发
+- **项目业务背景**：前端实用工具集合站（bfe-tools），围绕前端开发与日常使用中的高频痛点，提供 25+ 个工具，按 Python 后端引擎、Bun 服务和纯前端三类运行时组织
+- **技术栈**：
+  - **前端**：Vue 3（Composition API + `<script setup>`）+ Vite + TypeScript（strict）+ UnoCSS + Naive UI + Anime.js
+  - **Python 后端**：FastAPI + 12 个处理引擎（Whisper、edge-tts、easyocr、PyAV、Playwright、Pillow、PyMuPDF 等）
+  - **Bun 服务**：Bun + Elysia，提供 HTML/CSS 工具、API 请求测试、WebSocket 测试
+  - **桌面端**：Tauri v2（Rust）
+  - **包管理**：pnpm / bun（前端）· uv（Python 后端）· bun（Bun 服务）
+  - **提交规范**：Conventional Commits
+- **当前工具地图**：已落地 25+ 个工具，按 Python 后端引擎、Bun 服务、纯前端三类运行时组织。详见 [README.md#工具一览](README.md#工具一览)。
 
 ---
 
@@ -42,6 +39,8 @@
 - ❌ 禁止特定 API / 模式（如 Options API、`var`、`==`）
 - ❌ 禁止绕过质量门禁（如 `--no-verify`）
 - ❌ 禁止硬编码敏感信息
+- ❌ 禁止跳过必要设计直接编码：完整模式、高风险或需求不清的创造性工作必须先呈现设计并获用户批准；轻量任务可用一句话说明意图后继续
+- ❌ 禁止未经验证的完成声明：不得使用"应该可以了""看起来没问题""Agent 说通过了"等模糊表述
 - ✅ 先读后写：改任何文件前先 Read 该文件 + 相关规范
 
 ---
@@ -71,11 +70,15 @@
 - `TASK_MEMORY.md`：默认不读，只有用户明确要求或上下文压缩恢复时才读
 - 长流程、多轮任务按规范落盘 `TASK_MEMORY.md`
 
+> 详细的启动检查清单和自检流程见 `.agents/hooks/session-start.md`。
+
 ---
 
 ## 任务路由
 
 详细路由见 `.agents/task-routing.md`。
+
+除纯咨询外，所有任务先按 `.agents/task-routing.md` 选择执行路径；不得跳过路由直接自由执行。
 
 最小原则：
 
@@ -83,6 +86,17 @@
 - 轻量修改：读取最小必要规范后直接执行
 - 涉及职责边界、公共契约、数据流/状态流或独立决策面：按 `.agents/execution-mode-guidelines.md` 判断模式
 - 涉及多 Agent 协作：必读 `.agents/collaboration.md`
+
+任务开始时按固定格式输出：
+
+```text
+【任务路由】
+模式：[完整模式 / 轻量模式 / 直接回复]
+使用 Skill：[无 / skill-name]
+必读规范：[文件列表]
+是否需要 .changes：[是/否]
+下一步：[一句话说明]
+```
 
 ---
 
@@ -96,12 +110,26 @@
 
 领域规范（按任务命中补读）：
 
-- `.agents/coding-standards.md`（前端 TypeScript/Vue 3）
-- `.agents/coding-standards-python.md`（后端 Python/FastAPI）
+- `.agents/coding-standards/common.md`（语言无关原则，所有编码任务必读）
+- `.agents/coding-standards/typescript.md`（TS 项目补读；其他语言有对应文件时同理）
 - `.agents/git-workflow.md`
 - `.agents/quality-checklist.md`
 - `.agents/testing-guidelines.md`
 - （若项目存在则补读：component-guidelines、api-guidelines、state-management-guidelines 等）
+
+模式上下文（按当前阶段注入）：
+
+- `.agents/contexts/development.md` — 编码实现阶段
+- `.agents/contexts/review.md` — 代码审查阶段
+- `.agents/contexts/research.md` — 技术调研/探索阶段
+- `.agents/contexts/debug.md` — 调试排错阶段
+
+自动化钩子（自检清单）：
+
+- `.agents/hooks/session-start.md` — 会话启动检查
+- `.agents/hooks/session-end.md` — 会话收尾与记忆落盘
+- `.agents/hooks/pre-edit.md` — 编辑前检查
+- `.agents/hooks/pre-commit.md` — 提交前质量门禁
 
 协作规范（多 Agent / CCB 多模型场景）：
 
@@ -118,6 +146,7 @@
 - `.agents/ai-memory.md`
 - `.agents/context-compression-guidelines.md`
 - `.agents/spec-governance.md`
+- `.agents/continuous-learning.md`（Skill 进化与长期规则沉淀）
 
 Skill 与工具适配：
 
@@ -136,7 +165,7 @@ CCB 可选配置：
 ## 记忆文件
 
 | 文件 | 用途 | 读 | 写 |
-| --- | --- | --- | --- |
+|------|------|----|----|
 | `AI_MEMORY.md` | 项目背景、架构决策与通用经验 | 按需读取 | 命中写入触发条件时立即更新 |
 | `TASK_MEMORY.md` | 任务进展、关键决策 | 用户明确要求或恢复上下文时 | 决策产生时立即落盘；会话结束前更新状态 |
 
@@ -164,6 +193,17 @@ CCB 可选配置：
 
 ---
 
+## 流程哲学
+
+**流程是工具，不是目的。** 如果某个流程不能帮你更有效率，就应该改掉它。
+
+- Artifact（proposal、specs、design、tasks）可随时更新，不必 rigid 执行
+- 规范是指导而非枷锁；冲突时以用户明确指令为准
+- 轻量任务可裁剪步骤，只保留核心约束（先读后写、最小改动、验证）
+- 完整模式允许在 artifact 落盘后、实施前随时修改设计
+
+---
+
 ## 通用检查清单（每次任务）
 
 所有 AI 助手执行任务前/后需自检：
@@ -185,32 +225,72 @@ CCB 可选配置：
 
 ## 规范索引
 
-| 规范 | 路径 | 读取时机 | 适用场景 |
-| ------ | ------ | ---------- | ---------- |
-| **通用规范入口** | `AGENTS.md` | 每次会话启动 | 所有任务 |
-| **工作流与模式** | `.agents/workflow.md` | 任务启动时 | 所有任务 |
-| **执行模式判断** | `.agents/execution-mode-guidelines.md` | 判断模式时 | 所有任务 |
-| **任务路由** | `.agents/task-routing.md` | 任务启动时 | 所有任务 |
-| **编码标准（前端）** | `.agents/coding-standards.md` | 前端编码任务命中时 | 前端代码修改 |
-| **编码标准（Python）** | `.agents/coding-standards-python.md` | 后端编码任务命中时 | Python/FastAPI 代码修改 |
-| **Git 规范** | `.agents/git-workflow.md` | 涉及提交时 | git 操作 |
-| **质量检查** | `.agents/quality-checklist.md` | 编码完成后 | 代码修改 |
-| **测试规范** | `.agents/testing-guidelines.md` | 编码/测试任务时 | 代码修改 |
-| **多 Agent / CCB 协作** | `.agents/collaboration.md` | 多 Agent / CCB 场景 | 复杂任务 |
-| **编排规范** | `.agents/orchestrator.md` | 多 Agent / CCB 场景 | 复杂任务 |
-| **Agent 注册表** | `.agents/agent-registry.md` | 多 Agent / CCB 场景 | 复杂任务 |
-| **CCB 角色语义** | `.agents/agent-registry.md` | 判断 CCB agent 职责时 | 多模型协作 |
-| **Skill 指令清单** | `.agents/skills.md` | 使用或维护 skill 时 | 斜杠指令 |
-| **Skill 实现目录** | `.agents/skills/{skill-name}/SKILL.md` | 执行具体 skill 时 | 斜杠指令 |
-| **Claude 命令适配** | `.claude/commands/{skill-name}.md` | 使用 Claude Code 斜杠命令时 | Claude 专属 |
-| **CCB 安装与配置说明** | `.ccb/README.md` | 安装/迁移/排障 CCB 时 | CCB 多模型协作 |
-| **CCB Agent 配置** | `.ccb/ccb.config` | 调整 CCB agent / provider 时 | CCB 多模型协作 |
-| **AI 记忆** | `.agents/ai-memory.md` | 按需读取 | 所有任务 |
-| **任务记忆** | `.agents/task-memory.md` | 按需读取 | 长任务/恢复上下文 |
-| **AI 记忆文件** | `AI_MEMORY.md` | 按需读取 | 所有任务 |
-| **任务记忆文件** | `TASK_MEMORY.md` | 用户明确要求或恢复上下文时 | 长任务/恢复上下文 |
-| **上下文压缩** | `.agents/context-compression-guidelines.md` | 上下文告警时 | 长会话 |
-| **规范治理** | `.agents/spec-governance.md` | 规范变更时 | 维护规范 |
-| **Claude 专用** | `CLAUDE.md` | 使用 Claude Code 时 | Claude 专属 |
+### 🚀 启动必读
+
+| 规范 | 路径 | 读取时机 |
+|------|------|----------|
+| **通用规范入口** | `AGENTS.md` | 每次会话启动 |
+| **工作流与模式** | `.agents/workflow.md` | 任务启动时 |
+| **执行模式判断** | `.agents/execution-mode-guidelines.md` | 判断模式时 |
+| **任务路由** | `.agents/task-routing.md` | 任务启动时 |
+| **Claude 专用** | `CLAUDE.md` | 使用 Claude Code 时 |
+
+### 🔧 编码与质量
+
+| 规范 | 路径 | 适用场景 |
+|------|------|----------|
+| **编码标准（通用）** | `.agents/coding-standards/common.md` | 所有代码修改 |
+| **编码标准（TS）** | `.agents/coding-standards/typescript.md` | TypeScript 代码修改 |
+| **Git 规范** | `.agents/git-workflow.md` | git 操作 |
+| **质量检查** | `.agents/quality-checklist.md` | 编码完成后 |
+| **测试规范** | `.agents/testing-guidelines.md` | 编码/测试任务时 |
+| **编辑前钩子** | `.agents/hooks/pre-edit.md` | 编辑文件前 |
+| **提交前钩子** | `.agents/hooks/pre-commit.md` | git 提交前 |
+
+### 🤝 多 Agent / CCB 协作
+
+| 规范 | 路径 | 适用场景 |
+|------|------|----------|
+| **多 Agent / CCB 协作** | `.agents/collaboration.md` | 复杂任务 |
+| **编排规范** | `.agents/orchestrator.md` | 复杂任务 |
+| **Agent 注册表** | `.agents/agent-registry.md` | 多 Agent 场景 |
+| **CCB 安装与配置** | `.ccb/README.md` | 安装/排障 CCB |
+| **CCB Agent 配置** | `.ccb/ccb.config` | 调整 CCB 配置 |
+
+### 📋 Skill 与命令
+
+| 规范 | 路径 | 适用场景 |
+|------|------|----------|
+| **Skill 指令清单** | `.agents/skills.md` | 使用或维护 skill |
+| **Skill 实现** | `.agents/skills/{skill-name}/SKILL.md` | 执行具体 skill |
+| **Claude 命令适配** | `.claude/commands/{skill-name}.md` | Claude 专属 |
+| **启动钩子** | `.agents/hooks/session-start.md` | 会话启动时 |
+| **收尾钩子** | `.agents/hooks/session-end.md` | 会话结束时 |
+
+### 🧠 记忆与持久化
+
+| 规范 | 路径 | 适用场景 |
+|------|------|----------|
+| **AI 记忆** | `AI_MEMORY.md` | 项目背景、架构经验 |
+| **任务记忆** | `TASK_MEMORY.md` | 长任务/恢复上下文 |
+| **记忆写入规则** | `.agents/ai-memory.md` | 按需 |
+| **任务记忆规则** | `.agents/task-memory.md` | 按需 |
+
+### 🎯 模式上下文
+
+| 规范 | 路径 | 注入阶段 |
+|------|------|----------|
+| **开发模式** | `.agents/contexts/development.md` | Phase 2 编码 |
+| **审查模式** | `.agents/contexts/review.md` | Phase 3 审查 |
+| **调研模式** | `.agents/contexts/research.md` | 技术调研 |
+| **调试模式** | `.agents/contexts/debug.md` | Bug 修复 |
+
+### 🛡️ 治理与进化
+
+| 规范 | 路径 | 适用场景 |
+|------|------|----------|
+| **规范治理** | `.agents/spec-governance.md` | 规范变更 |
+| **持续学习** | `.agents/continuous-learning.md` | Skill 进化 |
+| **上下文压缩** | `.agents/context-compression-guidelines.md` | 长会话 |
 
 > 工具特有约束优先级高于通用规范。冲突时以专用配置文件为准。

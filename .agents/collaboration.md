@@ -103,7 +103,7 @@ ccb ask reviewer <<'EOF'
 【角色规范】[按本次执行角色 = Reviewer 展开]
 【已确认方案】[方案摘要 / 验收标准]
 【代码改动】[diff 或文件路径列表]
-必须读取：.agents/quality-checklist.md、.agents/coding-standards.md
+必须读取：.agents/quality-checklist.md、.agents/coding-standards/common.md
 请按「Reviewer 实现质量门禁」输出结论：可合入是/否、CRITICAL/HIGH 阻断、MEDIUM/LOW 建议
 EOF
 ccb pend --watch <job_id>

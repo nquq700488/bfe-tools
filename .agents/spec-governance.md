@@ -34,7 +34,8 @@
 
 | 文件 | 唯一职责 | 不应承载 |
 |------|---------|---------|
-| `coding-standards.md` | 通用编码约束 | 组件专属规范、协作机制、工作流判断 |
+| `coding-standards/common.md` | 通用编码约束 | 组件专属规范、协作机制、工作流判断 |
+| `coding-standards/typescript.md` | TypeScript 特定约束 | 其他语言规范、协作机制 |
 | `component-guidelines.md` | Vue 组件约束 | Store / API / JSBridge 正文 |
 | `styling-guidelines.md` | 样式与 CSS 约束 | 组件结构规范、协作流程 |
 | `state-management-guidelines.md` | Pinia Store 约束 | API 规范、组件规范 |
@@ -57,8 +58,10 @@
 
 - 先判断现有文件是否已有同类职责，避免新增重复源
 - 若只是补细节，优先修改原文件，不新建
-- 新文件必须能回答“它是某类规则的唯一来源吗”
+- 新文件必须能回答”它是某类规则的唯一来源吗”
 - 若不能成为唯一来源，不应新建
+- **规则的新增和重大修改**走 `continuous-learning.md` 的进化流程（模式提取 → 稳定性验证 → 固化）
+- **规则的微调和纠错**走本文档的修改检查清单即可
 
 ## 修改规范时检查
 

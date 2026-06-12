@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# 规范完整性测试
+# 用法：bash tests/spec-integrity.test
+# 或：./tests/spec-integrity.test
+#
+# 调用 validate-spec.sh 作为核心检查引擎，
+# 并补充测试特有的新基础设施文件检查。
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ERRORS=0
+
+# 加载公共检查函数
+source "$SCRIPT_DIR/../scripts/_check-common.sh"
+
+echo "========================================"
+echo "  规范完整性测试"
+echo "========================================"
+echo ""
+
+# ---------- Test 1: 核心检查（委托 validate-spec.sh）----------
+echo "[Test 1] 核心规范检查（委托 validate-spec.sh）..."
+if bash "$PROJECT_DIR/scripts/validate-spec.sh"; then
+  echo "  ✓ 全部核心检查通过"
+else
+  echo "  ✗ 核心检查失败，详见上方输出"
+  ((ERRORS++)) || true
+fi
+
+# ---------- Test 2: 新增基础设施文件 ----------
+echo ""
+echo "[Test 2] 新增基础设施文件..."
+INFRA_FILES=(
+  ".agents/hooks/session-start.md"
+  ".agents/hooks/session-end.md"
+  ".agents/hooks/pre-edit.md"
+  ".agents/hooks/pre-commit.md"
+  ".agents/contexts/development.md"
+  ".agents/contexts/review.md"
+  ".agents/contexts/research.md"
+  ".agents/contexts/debug.md"
+  ".agents/coding-standards/common.md"
+  ".agents/coding-standards/typescript.md"
+  ".agents/continuous-learning.md"
+  "scripts/validate-spec.sh"
+  "scripts/doctor.sh"
+  "scripts/_check-common.sh"
+  "tests/spec-integrity.test"
+)
+
+for file in "${INFRA_FILES[@]}"; do
+  if [[ -f "$PROJECT_DIR/$file" ]]; then
+    echo "  ✓ $file"
+  else
+    echo "  ✗ $file (缺失)"
+    ((ERRORS++)) || true
+  fi
+done
+
+# ---------- Test 3: 脚本可执行性 ----------
+echo ""
+echo "[Test 3] 脚本语法检查..."
+for script in "$PROJECT_DIR/scripts"/*.sh; do
+  if [[ -f "$script" ]]; then
+    script_name=$(basename "$script")
+    if bash -n "$script" 2>/dev/null; then
+      echo "  ✓ $script_name 语法正确"
+    else
+      echo "  ✗ $script_name 语法错误"
+      bash -n "$script" 2>&1 | sed 's/^/    /'
+      ((ERRORS++)) || true
+    fi
+  fi
+done
+
+# ---------- 结果汇总 ----------
+echo ""
+echo "========================================"
+echo "  测试结果"
+echo "========================================"
+
+if [[ $ERRORS -eq 0 ]]; then
+  echo "  全部通过 ✓ (0 错误)"
+  exit 0
+else
+  echo "  失败 ✗ ($ERRORS 个错误)"
+  exit 1
+fi

@@ -11,6 +11,28 @@ description: >
 > 本 skill 提供独立可调用的代码审查，不要求走完整 Plan→Dev→Review→Test→Deliver 流程。
 > 完整多 Agent 流程中的审查阶段见 `agent-workflow`。
 
+---
+
+## 执行卡片
+
+必须：
+- 获取真实变更范围
+- 读取 diff 和相关上下文
+- 先做 Stage 1 Spec/需求合规审查
+- Stage 1 通过后再做 Stage 2 代码质量审查
+- findings 优先，按严重级别排序
+
+禁止：
+- 只根据开发者汇报审查
+- 跳过或颠倒两阶段审查
+- 功能可用但实现粗糙时放行
+
+输出：
+- 使用 `Reviewer 结论` 格式
+- 阻断问题必须包含文件和行号
+
+---
+
 ## 铁律
 
 ```text
@@ -23,7 +45,7 @@ description: >
 
 1. `AGENTS.md`
 2. `.agents/quality-checklist.md`
-3. `.agents/coding-standards.md`
+3. `.agents/coding-standards/common.md`
 4. `.agents/testing-guidelines.md`（涉及测试代码时）
 
 ## 使用场景
@@ -111,7 +133,7 @@ ccb ask reviewer <<'EOF'
 【角色规范】
 本次执行角色：Reviewer
 规范来源：.agents/agent-registry.md「动态角色规范解析」
-必读规范：.agents/quality-checklist.md、.agents/coding-standards.md
+必读规范：.agents/quality-checklist.md、.agents/coding-standards/common.md
 必须门禁：Stage 1 spec 合规（确认做对了事）→ Stage 2 代码质量（确认把事做对了），顺序强制。不信任 Developer 汇报，必须读代码核实。功能可用但实现粗糙必须阻断为 HIGH。
 
 【已确认方案】[方案摘要]

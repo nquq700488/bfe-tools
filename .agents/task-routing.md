@@ -55,7 +55,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 
 **涉及样式时补读**：
 
@@ -76,7 +76,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 
 **项目存在时补读**：
 
@@ -97,7 +97,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 
 **项目存在时补读**：
 
@@ -113,7 +113,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 
 **项目存在时补读**：
 
@@ -128,7 +128,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 
 **项目存在时补读**：
 
@@ -149,7 +149,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 
 **项目存在时补读**：
 
@@ -183,7 +183,7 @@
 **最小必读**：
 
 - `AGENTS.md`
-- `coding-standards.md`
+- `coding-standards/common.md`（通用原则）
 - `testing-guidelines.md`
 
 **涉及复杂验证策略时补读**：

@@ -36,11 +36,21 @@
 
 ---
 
+### /onboard — 项目初始化
+
+- **用途**：新项目首次接入规范体系时生成必需的初始配置文件，帮助 Agent 快速建立项目心智模型
+- **触发时机**：用户说"初始化项目"、"接入 AI 规范"、"onboard"、"设置项目"；新项目首次使用本规范；规范文件缺失需要重建
+- **执行流程**：检查现有规范完整性 → 生成 `AI_MEMORY.md` 初稿 → 检查 CCB 配置 → 初始化 `.changes/` 目录 → 检查 `.claude/commands/` → 输出初始化报告
+- **注意事项**：不覆盖已存在的用户自定义文件；只生成框架不猜测业务逻辑；不执行 git commit
+- **配置文件**：[skills/onboard/SKILL.md](skills/onboard/SKILL.md)
+
+---
+
 ### /agent-workflow — 多 Agent 协作工作流
 
 - **用途**：本地多 Agent 编排层，负责五阶段串联和角色调度。各阶段执行委托给独立 skill（设计→`solution-brainstorm`、编码→`test-driven-development`、审查→`code-review`、反馈→`receiving-code-review`、调试→`systematic-debug`）
 - **触发时机**：复杂开发、复杂修复、代码审查、测试验证等需要 Plan → Dev → Review → Test → Deliver 阶段治理的任务
-- **执行流程**：先做模式判断（`execution-mode-guidelines.md`），再按 Orchestrator（`orchestrator.md`）五阶段推进；开发前必须做正式并行分析；交付前完成质量门禁；仅在用户要求提交时调用 `commit-helper`
+- **执行流程**：先做模式判断（`execution-mode-guidelines.md`），再按 Orchestrator（`orchestrator.md`）五阶段推进；Phase 0→Phase 2 切换时执行上下文卫生；Phase 2 按 `.changes/{feature}/tasks.md` 逐项执行并输出进度；交付前完成质量门禁；仅在用户要求提交时调用 `commit-helper`
 - **注意事项**：本地基线；需要 CCB 增强时升级到 `multi-agent-orchestrate`；规则权威来源在对应规范文件，不在 skill 内维护
 - **配置文件**：[skills/agent-workflow/SKILL.md](skills/agent-workflow/SKILL.md)
 
@@ -69,12 +79,12 @@
 
 ### /solution-brainstorm — 方案头脑风暴（完整模式前置设计门）
 
-- **用途**：完整模式、高风险或需求不清任务的前置设计门。模式 A（默认）：一对一设计细化，一次一问、逐节确认、Spec 落盘；模式 B：多模型/多角色头脑风暴（用户要求时），独立发散 → 交叉挑战 → 共识收敛
+- **用途**：完整模式、高风险或需求不清任务的前置设计门。模式 A（默认）：一对一设计细化，一次一问、逐节确认、Artifact 落盘；模式 B：多模型/多角色头脑风暴（用户要求时），独立发散 → 交叉挑战 → 共识收敛
 - **触发时机**：完整模式、高风险、需求不清，或用户要求先设计/多模型头脑风暴；轻量任务一句话说明意图后可继续
 - **执行流程**：
-  - 模式 A（默认）：探索上下文 → 评估范围 → 一次一问澄清 → 2-3 方案探索 → 逐节确认呈现 → Spec 落盘 → 自检 → 用户审核 → 过渡到 `agent-workflow`
-  - 模式 B（用户要求多模型时）：并行提交各 agent Round 1 → 交叉挑战 Round 2 → 收敛 Round 3 → 共识方案 → Spec 落盘
-- **注意事项**：完整模式禁止跳过设计直接编码；大项目先拆解子系统；完整模式 Spec 未落盘不算完成；不进入代码修改；不自动 git commit
+  - 模式 A（默认）：探索上下文 → 评估范围 → 一次一问澄清 → 2-3 方案探索 → 逐节确认呈现 → **Artifact 落盘（`.changes/{feature}/` 四文档：proposal + specs + design + tasks）** → 自检 → 用户审核 → 过渡到 `agent-workflow`
+  - 模式 B（用户要求多模型时）：并行提交各 agent Round 1 → 交叉挑战 Round 2 → 收敛 Round 3 → 共识方案 → Artifact 落盘
+- **注意事项**：完整模式禁止跳过设计直接编码；大项目先拆解子系统；完整模式 Artifact 未落盘不算完成；不进入代码修改；不自动 git commit
 - **配置文件**：[skills/solution-brainstorm/SKILL.md](skills/solution-brainstorm/SKILL.md)
 
 ---
