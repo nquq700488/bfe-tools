@@ -27,7 +27,8 @@ class ScreenshotEngine(ResponsiveScreenshotEngine):
         if not browser_manager.is_available:
             return EngineResult(
                 success=False,
-                error="playwright 未安装，请运行: pip install playwright && playwright install chromium",
+                error="playwright 未安装，请运行: pip install playwright && "
+                "playwright install chromium",
             )
 
         url = params.get("url", "").strip()
@@ -41,14 +42,20 @@ class ScreenshotEngine(ResponsiveScreenshotEngine):
         try:
             widths = [int(w.strip()) for w in widths_str.split(",") if w.strip()]
         except ValueError:
-            return EngineResult(success=False, error=f"widths 格式错误，应为逗号分隔的整数: {widths_str}")
+            return EngineResult(
+                success=False,
+                error=f"widths 格式错误，应为逗号分隔的整数: {widths_str}",
+            )
 
         if not widths:
             return EngineResult(success=False, error="widths 不能为空")
 
         valid_formats = ("png", "jpeg")
         if output_format not in valid_formats:
-            return EngineResult(success=False, error=f"不支持的格式: {output_format}，支持: {valid_formats}")
+            return EngineResult(
+                success=False,
+                error=f"不支持的格式: {output_format}，支持: {valid_formats}",
+            )
 
         settings.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_paths: list[Path] = []
@@ -58,10 +65,11 @@ class ScreenshotEngine(ResponsiveScreenshotEngine):
                 out_name = f"screenshot_{width}.{output_format}"
                 out_path = settings.RESULTS_DIR / out_name
 
+                height = 900 if width > 768 else int(width * 16 / 9)
                 screenshot_bytes = await browser_manager.screenshot(
                     url=url,
                     width=width,
-                    height=900,
+                    height=height,
                     full_page=full_page,
                     output_format=output_format,
                 )
@@ -71,27 +79,25 @@ class ScreenshotEngine(ResponsiveScreenshotEngine):
                 screenshot_paths.append(out_path)
                 logger.info(f"截图完成: {width}px ({len(screenshot_bytes)} bytes)")
 
-            # 打包为 zip
-            zip_path = settings.RESULTS_DIR / "screenshots.zip"
-            await asyncio.get_running_loop().run_in_executor(
-                None, create_zip, [str(p) for p in screenshot_paths], str(zip_path)
-            )
+            # 单分辨率：直接返回图片；多分辨率：打包 zip
+            if len(screenshot_paths) == 1:
+                output_path = screenshot_paths[0]
+            else:
+                output_path = settings.RESULTS_DIR / "screenshots.zip"
+                await asyncio.get_running_loop().run_in_executor(
+                    None, create_zip, [str(p) for p in screenshot_paths], str(output_path)
+                )
 
-            # 生成 srcset 代码
-            srcset_parts = [f"/api/v1/results/{p.name} {w}w" for p, w in zip(screenshot_paths, widths, strict=True)]
-            srcset = ",\n".join(srcset_parts)
-
-            logger.info(f"多分辨率截图完成: {len(widths)} 分辨率 → {zip_path}")
+            logger.info(f"截图完成: {len(widths)} 分辨率 → {output_path}")
             return EngineResult(
                 success=True,
                 data={"action": "responsive-screenshot", "format": output_format},
-                output_files=[str(zip_path)],
+                output_files=[str(output_path)],
                 metadata={
                     "widths": widths,
                     "url": url,
                     "full_page": full_page,
-                    "srcset": srcset,
-                    "files": [{"file_name": p.name, "width": w} for p, w in zip(screenshot_paths, widths, strict=True)],
+                    "files": [{"file_name": output_path.name, "width": widths[0]}],
                 },
             )
         except ValueError as e:
@@ -101,7 +107,8 @@ class ScreenshotEngine(ResponsiveScreenshotEngine):
             if "繁忙" in msg or "导航失败" in msg:
                 return EngineResult(
                     success=False,
-                    error=f"{msg}。建议：减少分辨率数量（如只截 1920/768 两个尺寸）、检查目标网站是否可访问，或稍后重试",
+                    error=f"{msg}。建议：选择较低分辨率、"
+                    "检查目标网站是否可访问，或稍后重试",
                 )
             return EngineResult(success=False, error=msg)
         except Exception as e:

@@ -1,8 +1,4 @@
 <script setup lang="ts">
-/**
- * ResponsiveScreenshotForm — 多分辨率截图表单
- * 无文件上传，输入 URL + 选择分辨率
- */
 import { ref } from 'vue'
 import { NInput, NSelect, NSwitch } from 'naive-ui'
 import type { BackendJobToolDefinition } from '@/types/tool'
@@ -15,7 +11,7 @@ defineProps<{
 const emit = defineEmits<{
   submit: [payload: {
     url: string
-    widths: number[]
+    width: number
     fullPage: boolean
     format: string
   }]
@@ -27,26 +23,15 @@ const fullPage = ref(true)
 const format = ref('png')
 
 const RESOLUTIONS = [
-  { label: '320 (Mobile S)', value: 320 },
-  { label: '375 (Mobile M)', value: 375 },
-  { label: '768 (Tablet)', value: 768 },
-  { label: '1024 (Tablet L)', value: 1024 },
-  { label: '1440 (Desktop)', value: 1440 },
-  { label: '1920 (Desktop L)', value: 1920 },
+  { value: 320, label: '📱 320 — 手机 S' },
+  { value: 375, label: '📱 375 — 手机 M' },
+  { value: 768, label: '📋 768 — 平板' },
+  { value: 1024, label: '📋 1024 — 平板 L' },
+  { value: 1440, label: '🖥️ 1440 — 桌面' },
+  { value: 1920, label: '🖥️ 1920 — 桌面 L' },
 ]
 
-const selectedWidths = ref<number[]>([320, 768, 1440])
-
-const PRESETS = [
-  { label: '📱 手机', widths: [320, 375] },
-  { label: '📋 平板', widths: [768, 1024] },
-  { label: '🖥️ 桌面', widths: [1440, 1920] },
-  { label: '⚡ 全部', widths: RESOLUTIONS.map((r) => r.value) },
-]
-
-function applyPreset(widths: number[]) {
-  selectedWidths.value = [...widths]
-}
+const selectedWidth = ref<number>(1920)
 
 function validateUrl(value: string): boolean {
   try {
@@ -59,11 +44,10 @@ function handleSubmit() {
   urlError.value = null
   if (!url.value.trim()) { urlError.value = '请输入网页地址'; return }
   if (!validateUrl(url.value.trim())) { urlError.value = '请输入有效的 http/https 地址'; return }
-  if (selectedWidths.value.length === 0) { urlError.value = '请选择至少一个分辨率'; return }
 
   emit('submit', {
     url: url.value.trim(),
-    widths: selectedWidths.value,
+    width: selectedWidth.value,
     fullPage: fullPage.value,
     format: format.value,
   })
@@ -72,7 +56,6 @@ function handleSubmit() {
 
 <template>
   <div class="rsf-form">
-    <!-- URL 输入卡片 -->
     <div class="rsf-card">
       <p class="rsf-card-title">网页地址</p>
       <NInput
@@ -86,47 +69,28 @@ function handleSubmit() {
       <p v-if="urlError" class="rsf-error">{{ urlError }}</p>
     </div>
 
-    <!-- 分辨率选择卡片 -->
     <div class="rsf-card">
-      <div class="rsf-card-header">
-        <p class="rsf-card-title">分辨率</p>
-        <div class="rsf-preset-row">
-          <button
-            v-for="p in PRESETS"
-            :key="p.label"
-            class="rsf-preset-btn"
-            @click="applyPreset(p.widths)"
-          >
-            {{ p.label }}
-          </button>
-        </div>
-      </div>
-
-      <div class="rsf-res-grid">
+      <p class="rsf-card-title">分辨率</p>
+      <div class="rsf-radio-grid">
         <label
           v-for="opt in RESOLUTIONS"
           :key="opt.value"
-          class="rsf-res-chip"
-          :class="{ active: selectedWidths.includes(opt.value) }"
+          class="rsf-radio-chip"
+          :class="{ active: selectedWidth === opt.value }"
         >
           <input
-            type="checkbox"
-            :checked="selectedWidths.includes(opt.value)"
+            type="radio"
+            :value="opt.value"
+            :checked="selectedWidth === opt.value"
             :disabled="isBusy"
-            class="rsf-checkbox"
-            @change="(e: Event) => {
-              const checked = (e.target as HTMLInputElement).checked
-              if (checked) selectedWidths.push(opt.value)
-              else selectedWidths = selectedWidths.filter(w => w !== opt.value)
-            }"
+            class="rsf-radio-input"
+            @change="selectedWidth = opt.value"
           />
-          <span class="rsf-res-value">{{ opt.value }}</span>
-          <span class="rsf-res-label">{{ opt.label.match(/\((.+)\)/)?.[1] ?? '' }}</span>
+          {{ opt.label }}
         </label>
       </div>
     </div>
 
-    <!-- 选项卡片 -->
     <div class="rsf-card">
       <p class="rsf-card-title">输出选项</p>
       <div class="rsf-options-row">
@@ -147,10 +111,9 @@ function handleSubmit() {
       </div>
     </div>
 
-    <!-- 提交 -->
     <button
       class="rsf-submit-btn"
-      :disabled="!url.trim() || selectedWidths.length === 0 || isBusy"
+      :disabled="!url.trim() || isBusy"
       @click="handleSubmit"
     >
       <span v-if="!isBusy">📸 开始截图</span>
@@ -176,53 +139,36 @@ function handleSubmit() {
   color: var(--color-neutral-800);
   margin: 0 0 14px;
 }
-.rsf-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.rsf-card-header .rsf-card-title { margin-bottom: 0; padding-top: 4px; }
 
 .rsf-url-input { --n-height: 44px; }
 
-.rsf-preset-row { display: flex; gap: 4px; flex-wrap: wrap; }
-.rsf-preset-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--color-neutral-200);
-  border-radius: 6px;
-  background: var(--color-white);
-  font-size: var(--text-xs);
-  color: var(--color-neutral-600);
-  cursor: pointer;
-  transition: all var(--duration-fast);
+.rsf-radio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
-.rsf-preset-btn:hover { border-color: var(--color-primary-400); background: var(--color-primary-50); }
-
-/* 分辨率芯片网格 */
-.rsf-res-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.rsf-res-chip {
+.rsf-radio-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  justify-content: center;
+  padding: 10px 8px;
   border: 1px solid var(--color-neutral-200);
   border-radius: 8px;
   cursor: pointer;
   transition: all var(--duration-fast);
   user-select: none;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-600);
 }
-.rsf-res-chip:hover { border-color: var(--color-primary-400); }
-.rsf-res-chip.active {
+.rsf-radio-chip:hover { border-color: var(--color-primary-400); }
+.rsf-radio-chip.active {
   border-color: var(--color-primary-500);
   background: var(--color-primary-50);
-}
-.rsf-checkbox { display: none; }
-.rsf-res-value {
-  font-size: var(--text-sm);
+  color: var(--color-primary-700);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-neutral-800);
-  font-family: var(--font-mono);
 }
-.rsf-res-chip.active .rsf-res-value { color: var(--color-primary-700); }
-.rsf-res-label { font-size: 11px; color: var(--color-neutral-400); }
+.rsf-radio-input { display: none; }
 
-/* 选项行 */
 .rsf-options-row { display: flex; gap: 32px; flex-wrap: wrap; }
 .rsf-option { display: flex; align-items: center; gap: 10px; }
 .rsf-option-label { font-size: var(--text-sm); color: var(--color-neutral-600); }
@@ -245,4 +191,8 @@ function handleSubmit() {
 .rsf-submit-btn:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .rsf-submit-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
 .rsf-submit-btn:active:not(:disabled) { transform: translateY(0); }
+
+@media (max-width: 480px) {
+  .rsf-radio-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>

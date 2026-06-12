@@ -315,9 +315,9 @@ async function handlePerfSnapshotSubmit(payload: { url: string }) {
   })
 }
 
-/** 多分辨率截图：不走上传，直接 params 传 url */
+/** 截图：不走上传，直接 params 传 url + 单分辨率 */
 async function handleScreenshotSubmit(payload: {
-  url: string; widths: number[]; fullPage: boolean; format: string
+  url: string; width: number; fullPage: boolean; format: string
 }) {
   showResult.value = false; currentJobId.value = null
   phase.value = 'processing'
@@ -325,7 +325,7 @@ async function handleScreenshotSubmit(payload: {
     toolId: toolId.value,
     params: {
       url: payload.url,
-      widths: payload.widths.join(','),
+      widths: String(payload.width),
       full_page: payload.fullPage ? 'true' : 'false',
       format: payload.format,
     },
@@ -536,20 +536,13 @@ async function copyToClipboard(text: string): Promise<void> {
           :file-name="downloadFileName || 'screenshots.zip'"
         />
 
-        <!-- 截图结果 -->
-        <div v-if="showResult && isScreenshotTool && resultDownloadUrl" class="result-meta-card">
-          <p class="rmc-title">截图完成</p>
-          <p class="rmc-desc" v-if="jobResultMetadata">
-            {{ (jobResultMetadata.widths as number[])?.length }} 个分辨率：
-            {{ (jobResultMetadata.widths as number[])?.join('px, ') }}px
-          </p>
-          <div v-if="jobResultMetadata?.srcset" class="rmc-code">
-            <div class="rmc-code-header">
-              <span class="rmc-code-label">srcset</span>
-              <button class="rmc-copy-btn" @click="copyToClipboard(jobResultMetadata.srcset as string)">复制</button>
-            </div>
-            <pre class="rmc-code-block">{{ jobResultMetadata.srcset }}</pre>
-          </div>
+        <!-- 截图结果：图片预览 -->
+        <div v-if="showResult && isScreenshotTool && resultDownloadUrl" class="result-preview-card">
+          <img
+            :src="resultDownloadUrl"
+            :alt="downloadFileName"
+            class="result-preview-image"
+          />
         </div>
       </template>
 

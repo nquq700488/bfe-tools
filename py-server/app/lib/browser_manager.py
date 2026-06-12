@@ -48,9 +48,9 @@ _BLOCKED_NETWORKS = [
 
 # 导航分层降级策略：依次尝试，超时后降级到下一级
 _NAVIGATION_STRATEGIES = [
-    ("networkidle", 15000),       # 最严格：等网络空闲
-    ("load", 10000),              # 降级：等 load 事件
-    ("domcontentloaded", 8000),   # 最终降级：等 DOM 解析完毕
+    ("networkidle", 15000),       # 等网络空闲（15s）
+    ("load", 10000),              # 降级：等 load 事件（10s）
+    ("domcontentloaded", 8000),   # 降级：等 DOM 解析完毕（8s）
 ]
 
 
@@ -157,10 +157,10 @@ class BrowserManager:
                 self._semaphore.acquire(),
                 timeout=settings.PLAYWRIGHT_QUEUE_TIMEOUT,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError(
                 f"服务器繁忙，请稍后重试（当前 {settings.PLAYWRIGHT_CONCURRENCY} 个并发任务已满）"
-            )
+            ) from None
         try:
             yield
         finally:
@@ -168,10 +168,8 @@ class BrowserManager:
 
     async def _navigate_with_fallback(self, page, url: str) -> None:
         """
-        分层降级导航：依次尝试 networkidle → load → domcontentloaded
-
-        每次降级都会记录 warning 日志，便于排查慢页面。
-        导航完成后等待渲染留白时间。
+        分层降级导航：networkidle → load → domcontentloaded → commit
+        所有策略均失败后，最后尝试 5s commit 兜底——页面只要能连接就截。
         """
         last_error = None
         for wait_until, timeout_ms in _NAVIGATION_STRATEGIES:
@@ -186,14 +184,20 @@ class BrowserManager:
             except Exception as e:
                 last_error = e
                 logger.warning(
-                    f"导航降级 (wait_until={wait_until}, timeout={timeout_ms}ms): {url} — {e}"
+                    f"导航降级 (wait_until={wait_until}, timeout={timeout_ms}ms): {url}"
                 )
         else:
-            raise RuntimeError(
-                f"页面导航失败（已尝试所有策略）: {url}，最后错误: {last_error}"
-            )
+            # 全部失败：最后尝试 5s commit，成功就截残页，失败才报错
+            logger.warning(f"所有导航策略均失败: {url}，最后尝试 5s commit 兜底")
+            try:
+                await page.goto(url, wait_until="commit", timeout=5000)
+            except Exception:
+                raise RuntimeError(
+                    f"页面无法访问（尝试了 {sum(t for _, t in _NAVIGATION_STRATEGIES) // 1000}s "
+                    f"+ 5s commit 兜底）: {url}"
+                ) from last_error
 
-        # 导航成功后留白渲染时间
+        # 留白渲染时间
         await page.wait_for_timeout(settings.PLAYWRIGHT_RENDER_GRACE_MS)
 
     async def start(self) -> None:
@@ -218,6 +222,7 @@ class BrowserManager:
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=True,
+            channel="chrome",
             args=[
                 "--disable-gpu",
                 "--disable-dev-shm-usage",
@@ -271,10 +276,16 @@ class BrowserManager:
             raise ValueError(f"URL 安全校验失败: {url}")
 
         async with self._semaphore_guard():
-            return await asyncio.wait_for(
-                self._screenshot_impl(url, width, height, full_page, output_format),
-                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
-            )
+            try:
+                return await asyncio.wait_for(
+                    self._screenshot_impl(url, width, height, full_page, output_format),
+                    timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
+                )
+            except TimeoutError:
+                raise RuntimeError(
+                    f"截图超时（{settings.PLAYWRIGHT_OPERATION_TIMEOUT}s）：{url}。"
+                    "建议选择较低分辨率或检查目标网站是否可访问"
+                ) from None
 
     async def _screenshot_impl(
         self,
@@ -285,16 +296,26 @@ class BrowserManager:
         output_format: str,
     ) -> bytes:
         """screenshot 的实际实现（被 _semaphore_guard + asyncio.wait_for 包裹）"""
+        # 小宽度 → 模拟手机 UA，确保服务端返回移动版内容
+        is_mobile = width <= 768
         context = await self._browser.new_context(
             viewport={"width": width, "height": height},
+            user_agent=(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                "Version/17.0 Mobile/15E148 Safari/604.1"
+            )
+            if is_mobile
+            else None,
         )
         try:
             page = await context.new_page()
 
             # 限制页面高度
             if full_page:
+                max_height = settings.PLAYWRIGHT_MAX_PAGE_HEIGHT
                 await page.add_init_script(
-                    f"document.documentElement.style.maxHeight = '{settings.PLAYWRIGHT_MAX_PAGE_HEIGHT}px';"
+                    f"document.documentElement.style.maxHeight = '{max_height}px';"
                 )
 
             await self._navigate_with_fallback(page, url)
@@ -336,10 +357,15 @@ class BrowserManager:
             raise RuntimeError("BrowserManager 未启动，请先调用 start()")
 
         async with self._semaphore_guard():
-            return await asyncio.wait_for(
-                self._render_html_impl(html, css, width, full_page, output_format),
-                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
-            )
+            try:
+                return await asyncio.wait_for(
+                    self._render_html_impl(html, css, width, full_page, output_format),
+                    timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
+                )
+            except TimeoutError:
+                raise RuntimeError(
+                    f"HTML 渲染超时（{settings.PLAYWRIGHT_OPERATION_TIMEOUT}s）"
+                ) from None
 
     async def _render_html_impl(
         self,
@@ -417,10 +443,15 @@ class BrowserManager:
             raise ValueError(f"URL 安全校验失败: {url}")
 
         async with self._semaphore_guard():
-            return await asyncio.wait_for(
-                self._to_pdf_impl(url, output_format, landscape, print_background),
-                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
-            )
+            try:
+                return await asyncio.wait_for(
+                    self._to_pdf_impl(url, output_format, landscape, print_background),
+                    timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT,
+                )
+            except TimeoutError:
+                raise RuntimeError(
+                    f"PDF 生成超时（{settings.PLAYWRIGHT_OPERATION_TIMEOUT}s）：{url}"
+                ) from None
 
     async def _to_pdf_impl(
         self,
@@ -471,10 +502,15 @@ class BrowserManager:
             raise ValueError(f"URL 安全校验失败: {url}")
 
         async with self._semaphore_guard():
-            return await asyncio.wait_for(
-                self._perf_snapshot_impl(url),
-                timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT + 15,
-            )
+            try:
+                return await asyncio.wait_for(
+                    self._perf_snapshot_impl(url),
+                    timeout=settings.PLAYWRIGHT_OPERATION_TIMEOUT + 15,
+                )
+            except TimeoutError:
+                raise RuntimeError(
+                    f"性能采集超时（{settings.PLAYWRIGHT_OPERATION_TIMEOUT + 15}s）：{url}"
+                ) from None
 
     async def _perf_snapshot_impl(self, url: str) -> dict:
         """perf_snapshot 的实际实现"""
@@ -528,7 +564,8 @@ class BrowserManager:
             try:
                 lcp_data = await page.evaluate("""() => {
                     const entries = performance.getEntriesByType('largest-contentful-paint');
-                    return entries.length > 0 ? Math.round(entries[entries.length - 1].startTime) : null;
+                    const last = entries[entries.length - 1];
+                    return entries.length > 0 ? Math.round(last.startTime) : null;
                 }""")
             except Exception:
                 lcp_data = None
