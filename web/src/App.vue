@@ -7,6 +7,7 @@ import { ref, onMounted } from 'vue'
 import { NConfigProvider, type GlobalThemeOverrides } from 'naive-ui'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import { initTauriRuntime } from '@/lib/runtime'
+import { initToolRegistry } from '@/tools/registry'
 
 /** Naive UI 主题覆盖 — 与设计 token 保持一致 */
 const themeOverrides: GlobalThemeOverrides = {
@@ -31,6 +32,8 @@ onMounted(async () => {
 
   const info = await initTauriRuntime()
   backendReady.value = true
+  // 从后端拉取工具/分类数据（不阻塞 UI）
+  initToolRegistry()
   if (info) {
     console.info('[App] Tauri 后端就绪:', info.baseUrl)
   }

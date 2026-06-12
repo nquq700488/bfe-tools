@@ -4,29 +4,19 @@
  * - 顶部搜索框：输入即过滤，不匹配的分类/工具整组隐藏
  * - NMenu 管理折叠/展开/active/键盘导航
  * - 移动端：横向滑动图标
+ * - 工具/分类数据从后端 SQLite 获取
  */
-import { computed, h, ref } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NMenu } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
-import { toolRegistry } from '@/tools/registry'
-import type { ToolCategory, ToolDefinition } from '@/types/tool'
+import { tools, categories, loading, error } from '@/tools/registry'
+import { initToolRegistry } from '@/tools/registry'
+import type { ToolDefinition } from '@/types/tool'
 
 const router = useRouter()
 const route = useRoute()
 const currentYear = new Date().getFullYear()
-
-// == 分类元数据 ==
-const CATEGORIES: { key: ToolCategory; label: string }[] = [
-  { key: 'text', label: '文本处理' },
-  { key: 'image', label: '图片处理' },
-  { key: 'audio', label: '音频处理' },
-  { key: 'video', label: '视频处理' },
-  { key: 'pdf', label: 'PDF 工具' },
-  { key: 'ui', label: 'UI / 设计' },
-  { key: 'browser', label: '浏览器' },
-  { key: 'general', label: '开发工具' },
-]
 
 // == 搜索 ==
 const searchQuery = ref('')
@@ -46,11 +36,11 @@ function toolOption(tool: ToolDefinition): MenuOption {
   }
 }
 
-// == 无搜索：分组树形结构 ==
+// == 无搜索：分组树形结构（分类数据来自后端） ==
 const groupedMenuOptions = computed<MenuOption[]>(() =>
-  CATEGORIES
+  categories.value
     .map((cat) => {
-      const items = [...toolRegistry.values()]
+      const items = tools.value
         .filter((t) => t.category === cat.key)
         .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
 
@@ -70,7 +60,7 @@ const flatMenuOptions = computed<MenuOption[]>(() => {
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return []
 
-  return [...toolRegistry.values()]
+  return tools.value
     .filter((t) =>
       t.name.toLowerCase().includes(query) ||
       t.description.toLowerCase().includes(query) ||
@@ -84,13 +74,32 @@ const menuOptions = computed<MenuOption[]>(() =>
   hasQuery.value ? flatMenuOptions.value : groupedMenuOptions.value,
 )
 
-// == 折叠控制（controlled — 支持点击展开/收起） ==
+// == 折叠控制（异步：等待数据加载后自动展开） ==
 const expandedKeys = ref<string[]>([])
-const activeTool = [...toolRegistry.values()].find((t) => t.id === activeKey.value)
-if (activeTool) expandedKeys.value.push(activeTool.category)
-if (CATEGORIES.length > 0 && !expandedKeys.value.includes(CATEGORIES[0].key)) {
-  expandedKeys.value.push(CATEGORIES[0].key)
-}
+
+// 当 tools 加载完成或路由变化时，展开对应分类
+watch(
+  [() => activeKey.value, tools],
+  ([key, toolList]) => {
+    if (!key) return
+    const tool = toolList.find((t) => t.id === key)
+    if (tool && !expandedKeys.value.includes(tool.category)) {
+      expandedKeys.value = [...expandedKeys.value, tool.category]
+    }
+  },
+  { immediate: true },
+)
+
+// 分类加载后默认展开第一个
+watch(
+  categories,
+  (cats) => {
+    if (cats.length > 0 && expandedKeys.value.length === 0) {
+      expandedKeys.value = [cats[0].key]
+    }
+  },
+  { immediate: true },
+)
 
 // == 导航 ==
 function handleMenuUpdate(_key: string, item: MenuOption) {
@@ -161,6 +170,13 @@ function handleExpandedKeysUpdate(keys: string[]) {
 
     <!-- 底部 -->
     <div class="sidebar-footer">
+      <div v-if="loading" class="sidebar-status sidebar-status--loading">
+        加载工具列表...
+      </div>
+      <div v-else-if="error" class="sidebar-status sidebar-status--error">
+        <span class="sidebar-error-text">加载失败</span>
+        <button class="sidebar-retry-btn" @click="initToolRegistry()">重试</button>
+      </div>
       <p class="sidebar-copyright">&copy; {{ currentYear }}</p>
     </div>
   </aside>
@@ -301,6 +317,40 @@ function handleExpandedKeysUpdate(keys: string[]) {
   font-size: 11px;
   color: var(--color-neutral-300);
   margin: 0;
+}
+.sidebar-status {
+  font-size: 12px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.sidebar-status--loading {
+  color: var(--color-primary-600);
+  background: var(--color-primary-50);
+}
+.sidebar-status--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+.sidebar-error-text {
+  font-size: 12px;
+}
+.sidebar-retry-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  background: #fff;
+  color: #b91c1c;
+  cursor: pointer;
+  transition: background-color var(--duration-fast);
+}
+.sidebar-retry-btn:hover {
+  background: #fee2e2;
 }
 
 /* === 移动端 === */

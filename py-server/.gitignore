@@ -2,6 +2,9 @@
 data/uploads/
 data/results/
 data/temp/
+# SQLite 运行时数据库文件（schema 与 seed 在代码中维护）
+data/*.db
+data/*.db-*
 
 # Python
 __pycache__/
