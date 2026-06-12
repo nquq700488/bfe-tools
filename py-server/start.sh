@@ -19,4 +19,4 @@ else
 fi
 
 echo "🚀 启动 bfe-tools 后端 → http://localhost:8000"
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level info
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level info --reload --reload-dir app
